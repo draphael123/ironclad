@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IRONCLAD — M5</title>
+<title>IRONCLAD — M6</title>
 <style>
   html,body{margin:0;height:100%;background:#0a0a0e;overflow:hidden;font-family:'Courier New',monospace;color:#c9b98a}
   #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
@@ -13,7 +13,7 @@
 </head>
 <body>
 <div id="wrap"><canvas id="c" width="480" height="270"></canvas></div>
-<div id="hint">Move · J light · K heavy · I grab · L/Space block(tap=parry) · walk RIGHT to advance · 1/2/3 pick upgrade · R restart</div>
+<div id="hint">Move · dbl-tap DASH · J light · K heavy · ↑+K launcher→juggle · I grab · L/Space block(tap=PARRY) · U Knight's Art · R restart</div>
 <script>
 (() => {
   "use strict";
@@ -36,7 +36,7 @@
   const SYS={ Escape:'pause',KeyP:'pause',Enter:'confirm',KeyR:'reset',Digit1:'opt1',Digit2:'opt2',Digit3:'opt3' };
   let BIND={ light:'KeyJ', heavy:'KeyK', grab:'KeyI', block:'KeyL' };
   let rebinding=null;
-  function mapCode(code){ if(MOVE[code]) return MOVE[code]; if(code==='Space') return 'block'; for(const a in BIND) if(BIND[a]===code) return a; if(SYS[code]) return SYS[code]; return null; }
+  function mapCode(code){ if(MOVE[code]) return MOVE[code]; if(code==='Space') return 'block'; if(code==='KeyU'||code==='KeyO') return 'special'; for(const a in BIND) if(BIND[a]===code) return a; if(SYS[code]) return SYS[code]; return null; }
   addEventListener('keydown', e=>{
     audioInit();
     if(rebinding){ if(e.code!=='Escape'&&!MOVE[e.code]&&e.code!=='Space'){ BIND[rebinding]=e.code; saveCfg(); } rebinding=null; e.preventDefault(); return; }
@@ -53,6 +53,8 @@
     gswing:{startup:5,active:5,recover:18,dmg:8,kb:5.0,reach:38,next:null},
     gcleave:{startup:16,active:6,recover:26,dmg:22,kb:11,reach:46,next:null},
     gpoke:{startup:8,active:4,recover:14,dmg:9,kb:4.0,reach:60,next:null},
+    dashatk:{startup:3,active:5,recover:16,dmg:12,kb:8.5,reach:38,next:null},
+    launch:{startup:8,active:5,recover:22,dmg:11,kb:3.0,reach:34,next:null,launch:true},
   };
   const PARRY_FRAMES=8;
 
@@ -93,7 +95,8 @@
       spd:o.spd||1.7,swing:o.swing,tele:o.tele||24,canBlock:o.canBlock||0,armor:!!o.armor,tough:!!o.tough,keep:o.keep||0,weapon:o.weapon||'sword',
       vx:0,vy:0,state:'idle',att:null,attT:0,attHit:false,combo:null,comboBuf:0,
       hitStun:0,stunT:0,downT:0,invul:0,flash:0,deadT:0,parryWindow:0,blockT:0,think:0,telegraph:0,
-      reachBonus:0,parryHeal:0,grabHeal:0,dmgMult:1,heavyMult:1 };
+      reachBonus:0,parryHeal:0,grabHeal:0,dmgMult:1,heavyMult:1,
+      z:0,zv:0,dashT:0,tapDir:0,tapT:0,valor:0,artT:0 };
   }
 
   let player, enemies, hitstop, shake, msg, msgT, msgCol, game;
@@ -120,6 +123,11 @@
   function frontX(f){ return f.x+f.face*12; }
   function fx(t,x,y,col,n){ hitstop=Math.max(hitstop,t); spark(x,y,col,n); }
   function banner(t,col){ if(t){ msg=t; msgT=45; msgCol=col||'#e8dcc0'; } }
+  function gainValor(f,a){ if(f.isPlayer) f.valor=Math.min(100,f.valor+a); }
+  function artHit(f,e){ e.hp-=8; e.flash=6; e.vx=(Math.sign(e.x-f.x)||1)*3;
+    if(e.state!=='air'){ e.state='hit'; e.hitStun=8; e.att=null; e.telegraph=0; e.blockT=0; }
+    spark(e.x,e.y-16-(e.z||0),'#e6c030',6);
+    if(e.hp<=0){ e.hp=0; e.state='dead'; e.deadT=0; SFX.death(); game.score+=100; game.bigFlash=8; } }
 
   function reachOf(att,dat){ return dat.reach + (att.isPlayer?att.reachBonus:0); }
   function targetsOf(att,reach){
@@ -131,14 +139,29 @@
 
   function resolveHit(att,tgt,dat){
     if(tgt.state==='dead'||tgt.state==='down'||tgt.invul>0) return;
+    // airborne target → juggle (can't block in the air)
+    if(tgt.state==='air'){
+      const jd=Math.round(dat.dmg*1.1); tgt.hp-=jd; tgt.zv=Math.max(tgt.zv,3.4); tgt.vx=(Math.sign(tgt.x-att.x)||att.face)*2; tgt.flash=6;
+      fx(6,frontX(att),tgt.y-16-tgt.z,'#ffd66b',10); shake=Math.max(shake,4); SFX.hit(false); if(att.isPlayer) gainValor(att,3);
+      if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; SFX.death(); if(att.isPlayer){ game.score+=100; game.bigFlash=8; } }
+      return;
+    }
     const facingAtt=Math.sign(att.x-tgt.x)===tgt.face||att.x===tgt.x;
     if(tgt.state==='block'&&facingAtt){
       if(tgt.isPlayer&&tgt.parryWindow>0){
         att.state='stagger'; att.stunT=34; att.att=null; att.telegraph=0; att.vx=Math.sign(att.x-tgt.x||-tgt.face)*2; tgt.parryWindow=0; tgt.flash=3;
-        if(tgt.parryHeal) tgt.hp=Math.min(tgt.maxhp,tgt.hp+tgt.parryHeal);
+        if(tgt.parryHeal) tgt.hp=Math.min(tgt.maxhp,tgt.hp+tgt.parryHeal); gainValor(tgt,34);
         fx(11,frontX(tgt),tgt.y-16,'#ffffff',18); shake=Math.max(shake,6); SFX.parry(); banner('PARRY!','#dff0ff'); return;
       }
       tgt.vx+=Math.sign(tgt.x-att.x||att.face)*(dat.kb*0.35); tgt.flash=4; fx(3,frontX(att),att.y-16,'#cfe0ff',6); shake=Math.max(shake,2); SFX.block(); return;
+    }
+    // uppercut launcher → airborne (armored/boss are too heavy to launch)
+    if(dat.launch && !tgt.boss && !tgt.armor){
+      const dmg=Math.round(dat.dmg*(tgt.isPlayer?tgt.dmgMult:1)); tgt.hp-=dmg;
+      tgt.state='air'; tgt.zv=6.2; tgt.z=0.1; tgt.vx=(Math.sign(tgt.x-att.x)||att.face)*1.5; tgt.flash=6; tgt.att=null; tgt.telegraph=0; tgt.blockT=0;
+      fx(8,frontX(att),att.y-24,'#ffe0a0',12); shake=Math.max(shake,5); SFX.hit(true); if(att.isPlayer) gainValor(att,5);
+      if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; SFX.death(); if(att.isPlayer){ game.score+=100; game.bigFlash=8; } }
+      return;
     }
     const light=dat.dmg<=6;
     let dmg=dat.dmg*(tgt.state==='stagger'?1.6:1);
@@ -151,7 +174,7 @@
     tgt.hp-=dmg; tgt.flash=6;
     if(interrupt){ tgt.vx=dir*dat.kb; tgt.state='hit'; tgt.hitStun=dmg>12?16:10; tgt.invul=6; tgt.att=null; tgt.telegraph=0; tgt.blockT=0; }
     else { tgt.vx+=dir*dat.kb*0.25; if(tgt.tough&&light) fx(2,frontX(att),att.y-16,'#c9d2e0',4); }
-    fx(dmg>12?9:6,frontX(att),att.y-16,tgt.state==='stagger'?'#ff9a4b':'#ffd66b',dmg>12?14:8); shake=Math.max(shake,dmg>12?6:3.5); SFX.hit(dmg>12);
+    fx(dmg>12?9:6,frontX(att),att.y-16,tgt.state==='stagger'?'#ff9a4b':'#ffd66b',dmg>12?14:8); shake=Math.max(shake,dmg>12?6:3.5); SFX.hit(dmg>12); if(att.isPlayer) gainValor(att,4);
     if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; fx(12,tgt.x,tgt.y-16,'#ffd66b',16); shake=8; SFX.death(); if(att.isPlayer){ game.score+=tgt.boss?500:100; game.bigFlash=8; } }
   }
   function tryHit(att,dat){ const r=reachOf(att,dat); for(const t of targetsOf(att,r)) resolveHit(att,t,dat); }
@@ -159,7 +182,7 @@
     const r=reachOf(att,dat); const t=targetsOf(att,r)[0];
     if(!t||t.state==='dead'||t.state==='down'||t.invul>0) return;
     const dir=att.face; t.hp-=dat.dmg; t.vx=dir*dat.kb; t.state='down'; t.downT=0; t.stunT=44; t.flash=6; t.att=null; t.blockT=0; t.telegraph=0;
-    if(att.isPlayer&&att.grabHeal) att.hp=Math.min(att.maxhp,att.hp+att.grabHeal);
+    if(att.isPlayer&&att.grabHeal) att.hp=Math.min(att.maxhp,att.hp+att.grabHeal); if(att.isPlayer) gainValor(att,8);
     fx(10,t.x,t.y-18,'#ffd66b',12); shake=Math.max(shake,7); SFX.grab(); banner(att.isPlayer?'THROW!':'','#ffe0a0');
     if(t.hp<=0){ t.hp=0; t.state='dead'; t.deadT=0; SFX.death(); if(att.isPlayer){ game.score+=t.boss?500:100; game.bigFlash=8; } }
   }
@@ -183,6 +206,14 @@
     if(f.state==='down'){ f.downT++; f.stunT--; f.x+=f.vx; f.vx*=0.85; if(f.stunT<=0){ f.state='idle'; f.invul=10; } clampPos(f); return; }
     if(f.state==='stagger'){ f.stunT--; f.x+=f.vx; f.vx*=0.7; if(f.stunT<=0) f.state='idle'; clampPos(f); return; }
     if(f.state==='hit'){ f.hitStun--; f.x+=f.vx; f.vx*=0.82; if(f.hitStun<=0) f.state='idle'; clampPos(f); return; }
+    if(f.state==='dash'){ f.dashT++; f.x+=f.vx; f.vx*=0.9; f.invul=Math.max(f.invul,2);
+      if(f.isPlayer&&(pressed.light||pressed.heavy)){ startAttack(f,'dashatk'); return; }
+      if(f.dashT>13) f.state='idle'; clampPos(f); return; }
+    if(f.state==='air'){ f.z+=f.zv; f.zv-=0.5; f.x+=f.vx; f.vx*=0.96;
+      if(f.z<=0){ f.z=0; f.state='down'; f.downT=0; f.stunT=26; f.vx*=0.4; } clampPos(f); return; }
+    if(f.state==='art'){ f.artT++; f.invul=3; f.vx*=0.8; f.x+=f.vx;
+      if(f.artT%5===0){ for(const e of enemies){ if(e.state==='dead'||e.state==='down') continue; if(Math.abs(e.x-f.x)<50&&Math.abs(e.y-f.y)<depthTol+10) artHit(f,e); } }
+      if(f.artT>42) f.state='idle'; clampPos(f); return; }
     if(f.state==='attack'){
       const dat=ATT[f.att]; f.attT++; f.x+=f.vx; f.vx*=0.7;
       if(f.attT>dat.startup&&f.attT<=dat.startup+dat.active&&!f.attHit){ if(dat.throw) tryGrab(f,dat); else tryHit(f,dat); f.attHit=true; }
@@ -191,10 +222,15 @@
       clampPos(f); return;
     }
     if(f.isPlayer){
+      if(f.tapT>0) f.tapT--;
+      if(pressed.left||pressed.right){ const d=pressed.right?1:-1;
+        if(f.tapDir===d&&f.tapT>0){ f.state='dash'; f.dashT=0; f.face=d; f.vx=d*4.6; f.invul=11; f.tapT=0; SFX.swing(); return; }
+        f.tapDir=d; f.tapT=13; }
+      if(pressed.special && f.valor>=50){ f.valor-=50; f.state='art'; f.artT=0; f.invul=46; f.vx=0; SFX.win(); banner("KNIGHT'S ART!",'#e6c030'); return; }
       if(pressed.grab){ startAttack(f,'grab'); return; }
       if(keys.block){ if(pressed.block) f.parryWindow=PARRY_FRAMES; f.state='block'; f.vx=0; f.vy=0; clampPos(f); return; }
       if(pressed.light){ startAttack(f,'light1'); return; }
-      if(pressed.heavy){ startAttack(f,'heavy'); return; }
+      if(pressed.heavy){ startAttack(f, keys.up?'launch':'heavy'); return; }
       let mx=(keys.right?1:0)-(keys.left?1:0), my=(keys.down?1:0)-(keys.up?1:0);
       f.vx=mx*f.spd; f.vy=my*f.spd*0.72; if(mx) f.face=mx; f.x+=f.vx; f.y+=f.vy; f.state=(mx||my)?'walk':'idle'; clampPos(f);
     } else updateAI(f);
@@ -294,8 +330,10 @@
   // ---- RENDER ----
   function drawKnight(f){
     const s=depthScale(f.y)*f.size;
+    const z=f.z||0;
     ctx.save(); ctx.translate(Math.round(f.x),Math.round(f.y));
-    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0,0,14*s,4.5*s,0,0,6.283); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,'+(0.35*Math.max(0.3,1-z/40))+')'; ctx.beginPath(); ctx.ellipse(0,0,(14-z*0.14)*s,4.5*s,0,0,6.283); ctx.fill();
+    ctx.translate(0,-z);
     ctx.scale(f.face*s,s);
     const dead=f.state==='dead',down=f.state==='down';
     if(dead){ ctx.rotate(Math.min(1.4,f.deadT*0.05)); ctx.globalAlpha=Math.max(.3,1-f.deadT*0.012); }
@@ -355,6 +393,8 @@
     if(f.state==='block'){ const par=f.parryWindow>0; ctx.fillStyle=par?'#fff':T; ctx.fillRect(9,-36,6,22); ctx.fillStyle=par?'#dff0ff':A; ctx.fillRect(10,-34,4,18); }
     ctx.restore();
     if(f.state==='stagger'){ ctx.fillStyle='#ffe98a'; for(let i=0;i<3;i++){ const a=performance.now()/150+i*2.1; ctx.fillRect(Math.round(f.x+Math.cos(a)*8),Math.round(f.y-58*f.size+Math.sin(a)*3),2,2); } }
+    if(f.state==='art'){ ctx.save(); ctx.translate(Math.round(f.x),Math.round(f.y-20)); const a=performance.now()/40; ctx.lineWidth=3;
+      for(let i=0;i<3;i++){ ctx.globalAlpha=0.55; ctx.strokeStyle=i%2?'#ffe98a':'#e6c030'; ctx.beginPath(); ctx.arc(0,0,18+i*7,a+i*2,a+i*2+2.3); ctx.stroke(); } ctx.globalAlpha=1; ctx.restore(); }
     if(!f.isPlayer&&!f.boss&&f.state!=='dead'){ const w=26,hx=Math.round(f.x-w/2),hy=Math.round(f.y-58*f.size-6); ctx.fillStyle='#000'; ctx.fillRect(hx-1,hy-1,w+2,4); ctx.fillStyle='#b04f4f'; ctx.fillRect(hx,hy,Math.max(0,w*f.hp/f.maxhp),2); }
     ctx.restore();
   }
@@ -422,7 +462,9 @@
     ctx.fillStyle='#14141c'; ctx.fillRect(16,21,10,2);
     ctx.fillStyle=pp.plume; ctx.fillRect(20,9,3,5);
     hbar(38,10,120,player.hp,player.maxhp,'#4fa04f','#26401f','KNIGHT');
-    for(let i=0;i<game.lives;i++){ const lx=38+i*10, ly=24; ctx.fillStyle='#c94f4f'; ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+7,ly); ctx.lineTo(lx+3.5,ly+7); ctx.closePath(); ctx.fill(); }
+    const vfull=player.valor>=50; hbar(38,21,120,player.valor,100,vfull?'#e6c030':'#8a7a30','#2a2410','');
+    if(vfull){ ctx.fillStyle=(performance.now()%700<420)?'#e6c030':'#9a8f6a'; ctx.font='7px "Courier New"'; ctx.fillText('ART READY [U]',120,20); }
+    for(let i=0;i<game.lives;i++){ const lx=38+i*10, ly=33; ctx.fillStyle='#c94f4f'; ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+7,ly); ctx.lineTo(lx+3.5,ly+7); ctx.closePath(); ctx.fill(); }
     ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.textAlign='right';
     ctx.fillText('SCORE '+String(game.score).padStart(6,'0'), W-10, 16);
     ctx.fillStyle='#c9b98a'; ctx.fillText('STAGE 1', W-10, 28); ctx.textAlign='left';
@@ -525,10 +567,10 @@
     logo(88); ['START','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,140+i*20,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0'),W/2,H-24);
     if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); } ctx.textAlign='left'; }
-  function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(90,46,300,178); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,68); ctx.font='10px "Courier New"'; ctx.textAlign='left';
-    const rows=[['Move','Arrows / WASD'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy attack',keyName(BIND.heavy)],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block',keyName(BIND.block)+' / Space'],['Parry','tap Block on impact'],['Pause','Esc / P']];
-    rows.forEach((r,i)=>{ const y=92+i*16; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],118,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],240,y); });
-    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.fillText('press ENTER to go back',W/2,214); ctx.textAlign='left'; }
+  function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
+    const rows=[['Move','Arrows / WASD'],['Dash / dodge','double-tap ◀ or ▶  (i-frames)'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy attack',keyName(BIND.heavy)],['Launcher','↑ + Heavy  → air-juggle'],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block',keyName(BIND.block)+' / Space'],['Parry','tap Block on impact → stagger'],["Knight's Art",'U  (spend full Valor)'],['Pause','Esc / P']];
+    rows.forEach((r,i)=>{ const y=74+i*15; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],96,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],210,y); });
+    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.fillText('press ENTER to go back',W/2,232); ctx.textAlign='left'; }
   function overlayMenu(title,opts){ ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,0,W,H); panel(140,58,200,154); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='15px "Courier New"'; ctx.fillText(title,W/2,88); ctx.textAlign='left'; opts.forEach((o,i)=>opt(o,W/2,120+i*22,menu.idx===i)); }
   function renderSettings(){ ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,0,W,H); panel(90,38,300,196); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='14px "Courier New"'; ctx.fillText('SETTINGS',W/2,62); ctx.textAlign='left';
     SET.forEach((s,i)=>{ const y=86+i*19, sel=menu.idx===i; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='11px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+s,108,y);

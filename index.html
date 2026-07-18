@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IRONCLAD — M4</title>
+<title>IRONCLAD — M5</title>
 <style>
   html,body{margin:0;height:100%;background:#0a0a0e;overflow:hidden;font-family:'Courier New',monospace;color:#c9b98a}
   #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
@@ -32,10 +32,17 @@
     return _sc[key]='#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1); }
 
   const keys={}, pressed={};
-  const CODE={ ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',
-    KeyJ:'light',KeyK:'heavy',KeyI:'grab',KeyL:'block',Space:'block',KeyR:'reset',Digit1:'opt1',Digit2:'opt2',Digit3:'opt3' };
-  addEventListener('keydown', e=>{ const a=CODE[e.code]; if(!a) return; e.preventDefault(); if(!keys[a]) pressed[a]=true; keys[a]=true; });
-  addEventListener('keyup', e=>{ const a=CODE[e.code]; if(a){ keys[a]=false; e.preventDefault(); } });
+  const MOVE={ ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down' };
+  const SYS={ Escape:'pause',KeyP:'pause',Enter:'confirm',KeyR:'reset',Digit1:'opt1',Digit2:'opt2',Digit3:'opt3' };
+  let BIND={ light:'KeyJ', heavy:'KeyK', grab:'KeyI', block:'KeyL' };
+  let rebinding=null;
+  function mapCode(code){ if(MOVE[code]) return MOVE[code]; if(code==='Space') return 'block'; for(const a in BIND) if(BIND[a]===code) return a; if(SYS[code]) return SYS[code]; return null; }
+  addEventListener('keydown', e=>{
+    audioInit();
+    if(rebinding){ if(e.code!=='Escape'&&!MOVE[e.code]&&e.code!=='Space'){ BIND[rebinding]=e.code; saveCfg(); } rebinding=null; e.preventDefault(); return; }
+    const a=mapCode(e.code); if(!a) return; e.preventDefault(); if(!keys[a]) pressed[a]=true; keys[a]=true;
+  });
+  addEventListener('keyup', e=>{ const a=mapCode(e.code); if(a) keys[a]=false; });
 
   const ATT={
     light1:{startup:4,active:4,recover:7,dmg:5,kb:2.2,reach:34,next:'light2'},
@@ -129,9 +136,9 @@
       if(tgt.isPlayer&&tgt.parryWindow>0){
         att.state='stagger'; att.stunT=34; att.att=null; att.telegraph=0; att.vx=Math.sign(att.x-tgt.x||-tgt.face)*2; tgt.parryWindow=0; tgt.flash=3;
         if(tgt.parryHeal) tgt.hp=Math.min(tgt.maxhp,tgt.hp+tgt.parryHeal);
-        fx(11,frontX(tgt),tgt.y-16,'#ffffff',18); shake=Math.max(shake,6); banner('PARRY!','#dff0ff'); return;
+        fx(11,frontX(tgt),tgt.y-16,'#ffffff',18); shake=Math.max(shake,6); SFX.parry(); banner('PARRY!','#dff0ff'); return;
       }
-      tgt.vx+=Math.sign(tgt.x-att.x||att.face)*(dat.kb*0.35); tgt.flash=4; fx(3,frontX(att),att.y-16,'#cfe0ff',6); shake=Math.max(shake,2); return;
+      tgt.vx+=Math.sign(tgt.x-att.x||att.face)*(dat.kb*0.35); tgt.flash=4; fx(3,frontX(att),att.y-16,'#cfe0ff',6); shake=Math.max(shake,2); SFX.block(); return;
     }
     const light=dat.dmg<=6;
     let dmg=dat.dmg*(tgt.state==='stagger'?1.6:1);
@@ -144,8 +151,8 @@
     tgt.hp-=dmg; tgt.flash=6;
     if(interrupt){ tgt.vx=dir*dat.kb; tgt.state='hit'; tgt.hitStun=dmg>12?16:10; tgt.invul=6; tgt.att=null; tgt.telegraph=0; tgt.blockT=0; }
     else { tgt.vx+=dir*dat.kb*0.25; if(tgt.tough&&light) fx(2,frontX(att),att.y-16,'#c9d2e0',4); }
-    fx(dmg>12?9:6,frontX(att),att.y-16,tgt.state==='stagger'?'#ff9a4b':'#ffd66b',dmg>12?14:8); shake=Math.max(shake,dmg>12?6:3.5);
-    if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; fx(12,tgt.x,tgt.y-16,'#ffd66b',16); shake=8; if(att.isPlayer){ game.score+=tgt.boss?500:100; game.bigFlash=8; } }
+    fx(dmg>12?9:6,frontX(att),att.y-16,tgt.state==='stagger'?'#ff9a4b':'#ffd66b',dmg>12?14:8); shake=Math.max(shake,dmg>12?6:3.5); SFX.hit(dmg>12);
+    if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; fx(12,tgt.x,tgt.y-16,'#ffd66b',16); shake=8; SFX.death(); if(att.isPlayer){ game.score+=tgt.boss?500:100; game.bigFlash=8; } }
   }
   function tryHit(att,dat){ const r=reachOf(att,dat); for(const t of targetsOf(att,r)) resolveHit(att,t,dat); }
   function tryGrab(att,dat){
@@ -153,13 +160,13 @@
     if(!t||t.state==='dead'||t.state==='down'||t.invul>0) return;
     const dir=att.face; t.hp-=dat.dmg; t.vx=dir*dat.kb; t.state='down'; t.downT=0; t.stunT=44; t.flash=6; t.att=null; t.blockT=0; t.telegraph=0;
     if(att.isPlayer&&att.grabHeal) att.hp=Math.min(att.maxhp,att.hp+att.grabHeal);
-    fx(10,t.x,t.y-18,'#ffd66b',12); shake=Math.max(shake,7); banner(att.isPlayer?'THROW!':'','#ffe0a0');
-    if(t.hp<=0){ t.hp=0; t.state='dead'; t.deadT=0; if(att.isPlayer){ game.score+=t.boss?500:100; game.bigFlash=8; } }
+    fx(10,t.x,t.y-18,'#ffd66b',12); shake=Math.max(shake,7); SFX.grab(); banner(att.isPlayer?'THROW!':'','#ffe0a0');
+    if(t.hp<=0){ t.hp=0; t.state='dead'; t.deadT=0; SFX.death(); if(att.isPlayer){ game.score+=t.boss?500:100; game.bigFlash=8; } }
   }
 
   const parts=[];
   function spark(x,y,col,n){ for(let i=0;i<n;i++){ const a=Math.random()*6.28,s=1+Math.random()*3; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:12+Math.random()*10,col}); } }
-  function startAttack(f,name){ const dat=ATT[name]; f.state='attack'; f.att=name; f.attT=0; f.attHit=false; f.vx*=0.3; f.combo=dat.next; f.comboBuf=0; }
+  function startAttack(f,name){ const dat=ATT[name]; f.state='attack'; f.att=name; f.attT=0; f.attHit=false; f.vx*=0.3; f.combo=dat.next; f.comboBuf=0; if(!dat.throw) SFX.swing(); }
 
   function bounds(f){
     // dynamic world clamp based on lock + camera
@@ -230,7 +237,7 @@
         if(g.waveIdx<gate.waves.length){ spawnWave(gate.waves[g.waveIdx]); }
         else {
           g.lock=false; gate.done=true; g.progressWall=gate.x-40;
-          if(gate.boss){ g.state='clear'; banner('CASTLE CLEARED — press R','#a9e5a9'); msgT=999; }
+          if(gate.boss){ g.state='clear'; banner('CASTLE CLEARED — press R','#a9e5a9'); msgT=999; SFX.win(); }
           else if(gate.reward){ offerUpgrade(); }
           g.gateIdx++;
         }
@@ -442,13 +449,106 @@
   function wrap(text,x,y,maxw,lh){ const words=text.split(' '); let line='',yy=y; ctx.textAlign='center'; const cx=x+maxw/2;
     for(const w of words){ const t=line+w+' '; if(ctx.measureText(t).width>maxw&&line){ ctx.fillText(line,cx,yy); line=w+' '; yy+=lh; } else line=t; } ctx.fillText(line,cx,yy); }
 
+  // ---- audio (procedural WebAudio) ----
+  let actx=null,sfxGain=null,musicGain=null,musicTimer=null,musicStep=0;
+  const cfg={sfx:0.6,music:0.4,musicOn:true};
+  let HISCORE=0;
+  function audioInit(){ if(actx) return; try{ actx=new (window.AudioContext||window.webkitAudioContext)();
+    sfxGain=actx.createGain(); sfxGain.gain.value=cfg.sfx; sfxGain.connect(actx.destination);
+    musicGain=actx.createGain(); musicGain.gain.value=cfg.musicOn?cfg.music:0; musicGain.connect(actx.destination); startMusic();
+  }catch(e){} }
+  function blip(freq,dur,type,gain,slideTo){ if(!actx) return; const o=actx.createOscillator(),g=actx.createGain();
+    o.type=type||'square'; o.frequency.value=freq; if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo,actx.currentTime+dur);
+    g.gain.value=gain||0.3; g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur); o.connect(g); g.connect(sfxGain); o.start(); o.stop(actx.currentTime+dur); }
+  function noise(dur,gain){ if(!actx) return; const n=Math.floor(actx.sampleRate*dur),buf=actx.createBuffer(1,n,actx.sampleRate),d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n); const s=actx.createBufferSource(); s.buffer=buf; const g=actx.createGain(); g.gain.value=gain||0.3; s.connect(g); g.connect(sfxGain); s.start(); }
+  const SFX={
+    swing:()=>blip(300,0.12,'sawtooth',0.10,150),
+    hit:(big)=>{ noise(big?0.18:0.1,big?0.45:0.28); blip(big?90:150,0.12,'square',0.22,60); },
+    block:()=>{ blip(760,0.08,'square',0.18,520); noise(0.05,0.12); },
+    parry:()=>{ blip(1200,0.16,'triangle',0.28,720); blip(1650,0.12,'sine',0.18,950); },
+    grab:()=>{ blip(120,0.2,'sawtooth',0.28,50); noise(0.12,0.28); },
+    death:()=>blip(200,0.4,'sawtooth',0.28,40),
+    select:()=>blip(520,0.06,'square',0.18,720),
+    win:()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>blip(f,0.22,'triangle',0.24),i*130)),
+  };
+  const BASS=[110,110,146.8,130.8], ARP=[440,523,659,523];
+  function mnote(freq,dur,type,gain){ if(!actx) return; const o=actx.createOscillator(),g=actx.createGain(); o.type=type; o.frequency.value=freq;
+    g.gain.value=0; g.gain.linearRampToValueAtTime(gain,actx.currentTime+0.02); g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur); o.connect(g); g.connect(musicGain); o.start(); o.stop(actx.currentTime+dur+0.02); }
+  function startMusic(){ if(musicTimer) return; musicTimer=setInterval(()=>{ if(!actx||!cfg.musicOn) return; const t=musicStep%16;
+    if(t%4===0) mnote(BASS[(musicStep>>2)%BASS.length]/2,0.34,'triangle',0.5);
+    mnote(ARP[t%ARP.length]*(t%8<4?1:1.5),0.11,'square',0.12); musicStep++; },220); }
+
+  // ---- config persistence ----
+  function saveCfg(){ try{ localStorage.setItem('ironclad',JSON.stringify({cfg,BIND,hi:HISCORE})); }catch(e){} }
+  function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem('ironclad')); if(s){ if(s.cfg) Object.assign(cfg,s.cfg); if(s.BIND) Object.assign(BIND,s.BIND); if(s.hi) HISCORE=s.hi; } }catch(e){} }
+  loadCfg();
+
+  // ---- scene / menu state ----
+  let scene='title', menu={idx:0}, settingsFrom='title';
+  const SET=['SFX Volume','Music','Rebind Light','Rebind Heavy','Rebind Grab','Rebind Block','Back'];
+  const RB=['light','heavy','grab','block'];
+  const keyName=c=>String(c).replace('Key','').replace('Digit','').replace('Arrow','');
+  function startRun(){ reset(); scene='play'; }
+  function checkHi(){ if(game.score>HISCORE){ HISCORE=game.score; saveCfg(); } }
+
+  function update(dt){
+    if(scene==='play'){
+      if(pressed.pause){ scene='pause'; menu.idx=0; SFX.select(); clearPressed(); return; }
+      if(game.state==='gameover'||game.state==='clear') checkHi();
+      step(dt); return;
+    }
+    menuUpdate();
+  }
+  function menuUpdate(){
+    const up=pressed.up,dn=pressed.down,lf=pressed.left,rt=pressed.right,ok=pressed.confirm||pressed.block||pressed.light,back=pressed.pause;
+    if(scene==='title'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(ok){ SFX.select(); if(menu.idx===0)startRun(); else if(menu.idx===1)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    else if(scene==='controls'){ if(ok||back){ SFX.select(); scene='title'; } }
+    else if(scene==='pause'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(back) scene='play'; else if(ok){ SFX.select(); if(menu.idx===0)scene='play'; else if(menu.idx===1){ settingsFrom='pause'; scene='settings'; menu.idx=0; } else scene='title'; } }
+    else if(scene==='settings'){ const n=SET.length; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(menu.idx===0&&(lf||rt)){ cfg.sfx=Math.max(0,Math.min(1,+(cfg.sfx+(rt?0.1:-0.1)).toFixed(2))); if(sfxGain)sfxGain.gain.value=cfg.sfx; SFX.select(); saveCfg(); }
+      else if(menu.idx===1&&(lf||rt||ok)){ cfg.musicOn=!cfg.musicOn; if(musicGain)musicGain.gain.value=cfg.musicOn?cfg.music:0; saveCfg(); }
+      else if(ok){ if(menu.idx>=2&&menu.idx<=5){ rebinding=RB[menu.idx-2]; SFX.select(); } else if(menu.idx===6){ SFX.select(); scene=settingsFrom; } }
+      if(back) scene=settingsFrom;
+    }
+    clearPressed();
+  }
+
+  // ---- menu rendering ----
+  function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
+  function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
+  function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
+  function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
+    const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
+    logo(88); ['START','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,140+i*20,menu.idx===i));
+    ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0'),W/2,H-24);
+    if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); } ctx.textAlign='left'; }
+  function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(90,46,300,178); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,68); ctx.font='10px "Courier New"'; ctx.textAlign='left';
+    const rows=[['Move','Arrows / WASD'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy attack',keyName(BIND.heavy)],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block',keyName(BIND.block)+' / Space'],['Parry','tap Block on impact'],['Pause','Esc / P']];
+    rows.forEach((r,i)=>{ const y=92+i*16; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],118,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],240,y); });
+    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.fillText('press ENTER to go back',W/2,214); ctx.textAlign='left'; }
+  function overlayMenu(title,opts){ ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,0,W,H); panel(140,58,200,154); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='15px "Courier New"'; ctx.fillText(title,W/2,88); ctx.textAlign='left'; opts.forEach((o,i)=>opt(o,W/2,120+i*22,menu.idx===i)); }
+  function renderSettings(){ ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,0,W,H); panel(90,38,300,196); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='14px "Courier New"'; ctx.fillText('SETTINGS',W/2,62); ctx.textAlign='left';
+    SET.forEach((s,i)=>{ const y=86+i*19, sel=menu.idx===i; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='11px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+s,108,y);
+      if(i===0){ const bx=250,bw=100; ctx.fillStyle='#3a3a3a'; ctx.fillRect(bx,y-7,bw,7); ctx.fillStyle='#4fa04f'; ctx.fillRect(bx,y-7,bw*cfg.sfx,7); ctx.strokeStyle='#c9b98a'; ctx.strokeRect(bx+0.5,y-6.5,bw-1,6); }
+      else if(i===1){ ctx.fillStyle=cfg.musicOn?'#4fa04f':'#8a4a4a'; ctx.fillText(cfg.musicOn?'ON':'OFF',258,y); }
+      else if(i>=2&&i<=5){ const act=RB[i-2]; ctx.fillStyle='#9a8f6a'; ctx.fillText('['+(rebinding===act?'press key…':keyName(BIND[act]))+']',258,y); }
+    });
+    ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('◀▶ adjust   ENTER select   ESC back',W/2,224); ctx.textAlign='left'; }
+  function drawAll(){ if(scene==='title'){ renderTitle(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
+
   let last=performance.now(),acc=0;
-  function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ step(F); acc-=1000/60; steps++; } render(); }
+  function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } drawAll(); }
   function frame(now){ tick(now); requestAnimationFrame(frame); }
   requestAnimationFrame(frame); setInterval(()=>tick(performance.now()),1000/30);
 
   window.__ironclad={
     get p(){return player;}, get e(){return enemies[0];}, get enemies(){return enemies;}, get game(){return game;},
+    get scene(){return scene;}, set scene(s){scene=s;}, get menu(){return menu;}, get cfg(){return cfg;}, get bind(){return BIND;},
+    key:(code)=>{ dispatchEvent(new KeyboardEvent('keydown',{code})); dispatchEvent(new KeyboardEvent('keyup',{code})); },
+    pump:(n=1)=>{ for(let i=0;i<n;i++) update(F); },
     keys, press:(k)=>{pressed[k]=true; keys[k]=true;}, release:(k)=>{keys[k]=false;},
     step:(n=1)=>{ for(let i=0;i<n;i++) step(F); render(); },
     reset, spawn:(t,x,y)=>spawnEnemy(t,x,y),

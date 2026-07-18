@@ -24,13 +24,13 @@ Then visit http://localhost:5783.
 | L / Space | Block (hold) |
 | R | Reset |
 
-## Status
+## Status — v1 complete ✅
 
-- **M0 — Core feel** ✅ one knight vs. one grunt, four verbs, hitstop, health bars, death
-- M1 — Combat depth (parry, grab/throw, telegraphs)
-- M2 — Enemy roster
-- M3 — Stage & progression
-- M4 — The Knights-of-the-Round look
-- M5 — Shell & ship
+- **M0 — Core feel** — knight vs. grunt, four verbs, hitstop, health bars, death
+- **M1 — Combat depth** — parry→stagger→punish, grab beats block, defensive grunt (the attack/block/grab triangle)
+- **M2 — Enemy roster** — grunt / berserker / spearman / shieldbreaker / captain, each punishes a different bad habit; multi-enemy engine
+- **M3 — Stage & progression** — scrolling world, screen-lock waves, boss, 1-of-3 upgrade picks, lives/continues, win state
+- **M4 — The Knights-of-the-Round look** — shaded paper-doll rig, parallax backdrop (moon/towers/torches), arcade HUD, vignette
+- **M5 — Shell & ship** — title/pause/settings menus, rebindable keys, SFX+music, localStorage + hi-score, procedural WebAudio
 
 Single-file HTML + Canvas 2D. Debug hook at `window.__ironclad`.

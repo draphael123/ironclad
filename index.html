@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRONCLAD — M0</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0a0e;overflow:hidden;font-family:'Courier New',monospace;color:#c9b98a}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;box-shadow:0 0 40px #000}
+  #hint{position:fixed;left:8px;bottom:6px;font-size:12px;opacity:.5;letter-spacing:1px}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="480" height="270"></canvas></div>
+<div id="hint">MOVE arrows/WASD &nbsp;·&nbsp; J light &nbsp;·&nbsp; K heavy &nbsp;·&nbsp; L/Space BLOCK (hold) &nbsp;·&nbsp; R reset</div>
+<script>
+(() => {
+  "use strict";
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const W = 480, H = 270;
+
+  // Scale canvas to window, keep aspect + integer-ish crispness
+  function resize(){
+    const s = Math.max(1, Math.min(Math.floor(innerWidth / W), Math.floor(innerHeight / H)) || 1);
+    cv.style.width = (W * s) + 'px'; cv.style.height = (H * s) + 'px';
+  }
+  addEventListener('resize', resize); resize();
+
+  // ---- Floor plane (2.5D): x world, y is DEPTH in screen space ----
+  const FLOOR_TOP = 168, FLOOR_BOT = 250, X_MIN = 18, X_MAX = 462;
+  const depthScale = y => 0.82 + (y - FLOOR_TOP) / (FLOOR_BOT - FLOOR_TOP) * 0.30;
+
+  // ---- Frame-based timing helpers (sim runs at fixed 60Hz) ----
+  const F = 1/60;
+
+  // ---- Input ----
+  const keys = {}, pressed = {};
+  const CODE = {
+    ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right',
+    ArrowUp:'up', KeyW:'up', ArrowDown:'down', KeyS:'down',
+    KeyJ:'light', KeyK:'heavy', KeyL:'block', Space:'block', KeyR:'reset'
+  };
+  addEventListener('keydown', e => {
+    const a = CODE[e.code]; if(!a) return; e.preventDefault();
+    if(!keys[a]) pressed[a] = true;
+    keys[a] = true;
+  });
+  addEventListener('keyup', e => { const a = CODE[e.code]; if(a){ keys[a] = false; e.preventDefault(); } });
+
+  // ---- Attack data (times in frames @60) ----
+  const ATT = {
+    light1:{ startup:4, active:4, recover:7, dmg:5, kb:2.2, reach:34, next:'light2' },
+    light2:{ startup:4, active:4, recover:8, dmg:5, kb:2.4, reach:34, next:'light3' },
+    light3:{ startup:5, active:5, recover:14,dmg:9, kb:5.0, reach:36, next:null },
+    heavy: { startup:11,active:5, recover:20,dmg:16,kb:7.5, reach:40, next:null },
+  };
+
+  function makeFighter(o){
+    return {
+      x:o.x, y:o.y, face:o.face, isPlayer:!!o.isPlayer,
+      hp:o.hp, maxhp:o.hp, name:o.name, pal:o.pal,
+      vx:0, vy:0,
+      state:'idle',        // idle | walk | attack | block | hit | dead | ai_*
+      att:null, attT:0, attHit:false, combo:null, comboBuf:0,
+      hitStun:0, invul:0, flash:0, deadT:0,
+      // ai
+      think:0, telegraph:0,
+      lungeX:0
+    };
+  }
+
+  let player, enemy, hitstop, shake, msg, msgT, over;
+
+  function reset(){
+    player = makeFighter({x:150,y:225,face:1,isPlayer:true,hp:100,name:'KNIGHT',
+      pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
+    enemy  = makeFighter({x:340,y:225,face:-1,isPlayer:false,hp:60,name:'GRUNT',
+      pal:{armor:'#8a5233',trim:'#c48a4e',dark:'#3c2417',skin:'#c99a6a',plume:'#7a7a7a',weap:'#d8d2c4'}});
+    hitstop=0; shake=0; msg=''; msgT=0; over=0;
+  }
+  reset();
+
+  // ---- Geometry ----
+  const bodyHalfW = 11, depthTol = 20;
+  function frontX(f){ return f.x + f.face * 12; }
+
+  function tryHit(att, dat){
+    // hitbox in front of attacker; att already the fighter
+    const target = att.isPlayer ? enemy : player;
+    if(target.state === 'dead') return;
+    const hx = att.x + att.face * (12 + dat.reach*0.5);
+    const halfReach = dat.reach*0.5 + 6;
+    const dx = Math.abs(target.x - hx);
+    const dy = Math.abs(target.y - att.y);
+    if(dx <= halfReach + bodyHalfW && dy <= depthTol){
+      landHit(att, target, dat);
+    }
+  }
+
+  function landHit(att, tgt, dat){
+    if(tgt.invul > 0) return;
+    // Blocking: negate if guarding & facing the attacker
+    const facingAtt = Math.sign(att.x - tgt.x) === tgt.face || att.x === tgt.x;
+    if(tgt.state === 'block' && facingAtt){
+      tgt.vx += Math.sign(tgt.x - att.x || att.face) * (dat.kb*0.35);
+      tgt.flash = 4; hitstop = Math.max(hitstop, 3); shake = Math.max(shake,2);
+      spark(frontX(att), att.y-16, '#cfe0ff', 6);
+      return; // chip-free block for M0
+    }
+    tgt.hp -= dat.dmg;
+    const dir = Math.sign(tgt.x - att.x) || att.face;
+    tgt.vx = dir * dat.kb;
+    tgt.state = 'hit'; tgt.hitStun = dat.dmg>12?16:10; tgt.invul = 6; tgt.flash = 6;
+    tgt.att = null; tgt.telegraph = 0;
+    hitstop = Math.max(hitstop, dat.dmg>12?9:6);
+    shake = Math.max(shake, dat.dmg>12?6:3.5);
+    spark(frontX(att), att.y-16, '#ffd66b', dat.dmg>12?14:8);
+    if(tgt.hp <= 0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; hitstop=Math.max(hitstop,12); shake=8; }
+  }
+
+  // ---- particles ----
+  const parts=[];
+  function spark(x,y,col,n){ for(let i=0;i<n;i++){ const a=Math.random()*6.28,s=1+Math.random()*3; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:12+Math.random()*10,col}); } }
+
+  function startAttack(f, name){
+    const dat = ATT[name];
+    f.state='attack'; f.att=name; f.attT=0; f.attHit=false; f.vx*=0.3;
+    f.combo = dat.next; f.comboBuf = 0;
+  }
+
+  function updateFighter(f, dt){
+    if(f.flash>0) f.flash--;
+    if(f.invul>0) f.invul--;
+
+    if(f.state==='dead'){ f.deadT++; f.vx*=0.86; f.x+=f.vx; return; }
+
+    if(f.state==='hit'){
+      f.hitStun--; f.x += f.vx; f.vx*=0.82;
+      if(f.hitStun<=0) f.state='idle';
+      clampPos(f); return;
+    }
+
+    if(f.state==='attack'){
+      const dat = ATT[f.att]; f.attT++;
+      f.x += f.vx; f.vx*=0.7;
+      // active window → check hit once
+      if(f.attT>dat.startup && f.attT<=dat.startup+dat.active && !f.attHit){
+        const before = (f.isPlayer?enemy:player).hp;
+        tryHit(f, dat);
+        if((f.isPlayer?enemy:player).hp !== before || true) { /* single swing */ }
+        f.attHit = true; // one hit per swing
+      }
+      // buffer combo input (player only)
+      if(f.isPlayer && dat.next && pressed.light) f.comboBuf = 8;
+      if(f.comboBuf>0) f.comboBuf--;
+      // recovery done
+      if(f.attT >= dat.startup+dat.active+dat.recover){
+        if(f.isPlayer && dat.next && f.comboBuf>0){ startAttack(f, dat.next); }
+        else f.state='idle';
+      }
+      clampPos(f); return;
+    }
+
+    if(f.isPlayer){
+      // block (hold) — cannot block mid-attack
+      if(keys.block){ f.state='block'; f.vx=0; f.vy=0; clampPos(f); return; }
+      // attacks
+      if(pressed.light){ startAttack(f,'light1'); return; }
+      if(pressed.heavy){ startAttack(f,'heavy'); return; }
+      // movement
+      let mx=(keys.right?1:0)-(keys.left?1:0), my=(keys.down?1:0)-(keys.up?1:0);
+      const spd=1.7;
+      f.vx=mx*spd; f.vy=my*spd*0.72;
+      if(mx) f.face=mx;
+      f.x+=f.vx; f.y+=f.vy;
+      f.state=(mx||my)?'walk':'idle';
+      clampPos(f);
+    } else {
+      updateAI(f, dt);
+    }
+  }
+
+  function updateAI(f, dt){
+    const p = player;
+    if(p.state==='dead'){ f.state='idle'; return; }
+    const dx = p.x - f.x, dy = p.y - f.y;
+    f.face = dx>=0?1:-1;
+    const adx=Math.abs(dx), ady=Math.abs(dy);
+
+    if(f.telegraph>0){
+      f.telegraph--; f.vx*=0.6; f.x+=f.vx;
+      if(f.telegraph===0){ // commit swing (uses heavy-ish grunt swing)
+        startAttack(f,'light3');
+      }
+      f.state='block'; // reuse 'block' pose flagless; we mark via telegraph flash in render
+      clampPos(f); return;
+    }
+
+    f.think--;
+    const inRange = adx < 40 && ady < depthTol;
+    if(inRange && f.think<=0 && Math.random()<0.9){
+      // wind up telegraph
+      f.telegraph = 26; f.think = 40;
+      f.vx=0; clampPos(f); return;
+    }
+    // approach
+    const spd=1.15;
+    let mvx = adx>28 ? Math.sign(dx) : 0;
+    let mvy = ady>10 ? Math.sign(dy) : 0;
+    f.vx=mvx*spd; f.vy=mvy*spd*0.7;
+    f.x+=f.vx; f.y+=f.vy;
+    f.state=(mvx||mvy)?'walk':'idle';
+    if(f.think<=0) f.think=1;
+    clampPos(f);
+  }
+
+  function clampPos(f){
+    f.x=Math.max(X_MIN,Math.min(X_MAX,f.x));
+    f.y=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,f.y));
+  }
+
+  // ---- SIM STEP ----
+  function step(dt){
+    // consume edge-press flags at end
+    if(hitstop>0){ hitstop--; // freeze fighters, still tick particles a touch
+      for(const pt of parts){ pt.x+=pt.vx*0.2; pt.y+=pt.vy*0.2; }
+      clearPressed(); return;
+    }
+    updateFighter(player, dt);
+    updateFighter(enemy, dt);
+
+    // depth sort handled at render
+    for(let i=parts.length-1;i>=0;i--){ const pt=parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.25; pt.life--; if(pt.life<=0) parts.splice(i,1); }
+    if(shake>0) shake*=0.85;
+    if(msgT>0) msgT--;
+
+    // win/lose
+    if(!over){
+      if(enemy.state==='dead' && enemy.deadT>40){ msg='GRUNT DOWN — press R'; msgT=999; over=1; }
+      if(player.state==='dead' && player.deadT>40){ msg='YOU FELL — press R'; msgT=999; over=1; }
+    }
+    if(pressed.reset) reset();
+    clearPressed();
+  }
+  function clearPressed(){ for(const k in pressed) pressed[k]=false; }
+
+  // ---- RENDER ----
+  function drawKnight(f){
+    const s=depthScale(f.y);
+    ctx.save();
+    ctx.translate(Math.round(f.x), Math.round(f.y));
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,.35)';
+    ctx.beginPath(); ctx.ellipse(0,0,14*s,4.5*s,0,0,6.283); ctx.fill();
+
+    ctx.scale(f.face*s, s);
+    const dead = f.state==='dead';
+    if(dead){ ctx.rotate(Math.min(1.4, f.deadT*0.05)); ctx.globalAlpha=Math.max(.3,1-f.deadT*0.012); }
+
+    const p=f.pal;
+    const hit = f.flash>0 && (f.flash%2===0);
+    const teleg = (!f.isPlayer && f.telegraph>0 && f.telegraph%6<3);
+    const tint = hit ? '#ffffff' : (teleg ? '#ff5a3c' : null);
+    const A = tint||p.armor, T = tint||p.trim, D = tint||p.dark;
+
+    // legs
+    const walk = f.state==='walk' ? Math.sin(performance.now()/90)*2 : 0;
+    ctx.fillStyle=D;
+    ctx.fillRect(-7,-14, 5,14+walk); ctx.fillRect(2,-14, 5,14-walk);
+    // torso (armor)
+    ctx.fillStyle=A; ctx.fillRect(-9,-34,18,22);
+    ctx.fillStyle=T; ctx.fillRect(-9,-34,18,3); ctx.fillRect(-2,-32,4,18);
+    // shield arm (back)
+    ctx.fillStyle=D; ctx.fillRect(-13,-30,5,15);
+    ctx.fillStyle=T; ctx.fillRect(-14,-31,4,17);
+    // head + helmet
+    ctx.fillStyle=p.skin; ctx.fillRect(-5,-44,10,10);
+    ctx.fillStyle=A; ctx.fillRect(-6,-46,12,6); ctx.fillRect(-6,-40,12,3);
+    ctx.fillStyle=D; ctx.fillRect(-6,-39,12,2); // visor slit
+    // plume
+    ctx.fillStyle=hit?'#fff':p.plume; ctx.fillRect(-1,-52,3,7);
+
+    // weapon / swing
+    if(f.state==='attack'){
+      const dat=ATT[f.att]; const prog=f.attT/(dat.startup+dat.active+dat.recover);
+      const swing = Math.min(1, Math.max(0,(f.attT-dat.startup*0.5)/(dat.startup+dat.active)));
+      const ang = -1.2 + swing*2.4;
+      ctx.save(); ctx.translate(8,-30); ctx.rotate(ang);
+      ctx.fillStyle=p.weap; ctx.fillRect(0,-2, dat.reach*0.9, 4);
+      ctx.fillStyle=T; ctx.fillRect(-3,-4,5,8);
+      // slash arc during active
+      if(f.attT>dat.startup && f.attT<=dat.startup+dat.active){
+        ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(0,0,dat.reach*0.9,-0.5,0.6); ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      // resting weapon
+      ctx.fillStyle=p.weap; ctx.fillRect(9,-40,3,26);
+      ctx.fillStyle=T; ctx.fillRect(8,-16,5,4);
+    }
+    // block pose: raise shield front
+    if(f.state==='block' && f.isPlayer){
+      ctx.fillStyle=T; ctx.fillRect(9,-36,6,22);
+      ctx.fillStyle=A; ctx.fillRect(10,-34,4,18);
+    }
+    ctx.restore();
+  }
+
+  function bar(x,y,w,cur,max,col,label){
+    ctx.fillStyle='#000'; ctx.fillRect(x-2,y-2,w+4,12);
+    ctx.fillStyle='#3a3a3a'; ctx.fillRect(x,y,w,8);
+    ctx.fillStyle=col; ctx.fillRect(x,y,Math.max(0,w*cur/max),8);
+    ctx.fillStyle='#e8dcc0'; ctx.font='7px "Courier New"';
+    ctx.fillText(label, x, y-3);
+  }
+
+  function render(){
+    ctx.save();
+    const sh = shake>0.3 ? shake : 0;
+    ctx.translate((Math.random()-.5)*sh,(Math.random()-.5)*sh);
+
+    // background — placeholder arcade backdrop
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#20161f'); g.addColorStop(.55,'#2c2334'); g.addColorStop(.56,'#3a2f22'); g.addColorStop(1,'#1c1610');
+    ctx.fillStyle=g; ctx.fillRect(-10,-10,W+20,H+20);
+    // distant castle wall
+    ctx.fillStyle='#241b26';
+    for(let i=0;i<8;i++){ ctx.fillRect(i*64-8,70,52,90); ctx.fillRect(i*64+2,58,10,14); ctx.fillRect(i*64+24,58,10,14); }
+    // floor
+    ctx.fillStyle='#2a2016'; ctx.fillRect(-10,FLOOR_TOP-4,W+20,H);
+    ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=1;
+    for(let i=0;i<12;i++){ const y=FLOOR_TOP+i*8; ctx.beginPath(); ctx.moveTo(-10,y); ctx.lineTo(W+10,y); ctx.stroke(); }
+
+    // depth-sorted fighters
+    const list=[player,enemy].sort((a,b)=>a.y-b.y);
+    for(const f of list) drawKnight(f);
+
+    // particles
+    for(const pt of parts){ ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,2,2); }
+    ctx.globalAlpha=1;
+
+    ctx.restore();
+
+    // HUD
+    bar(14,14,150,player.hp,player.maxhp,'#4fa04f','KNIGHT');
+    bar(W-14-150,14,150,enemy.hp,enemy.maxhp,'#b04f4f','GRUNT');
+
+    if(msgT>0){
+      ctx.fillStyle='#000'; ctx.fillRect(0,H/2-14,W,28);
+      ctx.fillStyle='#e8dcc0'; ctx.font='14px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText(msg, W/2, H/2+5); ctx.textAlign='left';
+    }
+  }
+
+  // ---- LOOP: RAF + setInterval watchdog (preview-hidden freeze fix) ----
+  let last=performance.now(), acc=0;
+  function tick(now){
+    let dt=now-last; last=now;
+    if(dt>250) dt=250; // cap after tab stall
+    acc+=dt;
+    let steps=0;
+    while(acc>=1000/60 && steps<6){ step(F); acc-=1000/60; steps++; }
+    render();
+  }
+  function frame(now){ tick(now); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+  setInterval(()=>tick(performance.now()), 1000/30); // watchdog when RAF paused
+
+  // ---- Debug / screenshot hook ----
+  window.__ironclad = {
+    get p(){return player;}, get e(){return enemy;},
+    keys, press:(k)=>{pressed[k]=true; keys[k]=true;},
+    release:(k)=>{keys[k]=false;},
+    step:(n=1)=>{ for(let i=0;i<n;i++) step(F); render(); },
+    reset,
+    state:()=>({player:{x:player.x,y:player.y,hp:player.hp,st:player.state,att:player.att},
+                enemy:{x:enemy.x,y:enemy.y,hp:enemy.hp,st:enemy.state,tel:enemy.telegraph}}),
+    cap:()=>cv.toDataURL('image/png')
+  };
+})();
+</script>
+</body>
+</html>

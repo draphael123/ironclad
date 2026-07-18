@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ironclad",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5783", "--directory", "ironclad"],
+      "port": 5783
+    }
+  ]
+}

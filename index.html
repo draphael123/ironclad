@@ -9,6 +9,15 @@
   #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
   canvas{image-rendering:pixelated;image-rendering:crisp-edges;background:#000;box-shadow:0 0 40px #000}
   #hint{position:fixed;left:8px;bottom:6px;font-size:12px;opacity:.5;letter-spacing:1px}
+  #touch{position:fixed;inset:0;pointer-events:none;z-index:10;display:none}
+  #touch.on{display:block}
+  .tbtn{position:absolute;pointer-events:auto;border:2px solid rgba(201,185,138,.55);background:rgba(20,16,26,.42);color:#e8dcc0;border-radius:50%;display:flex;align-items:center;justify-content:center;font:bold 11px 'Courier New',monospace;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+  .tbtn.on{background:rgba(230,192,48,.5);border-color:#e6c030}
+  .tbtn.sm{width:46px;height:46px;font-size:9px}
+  .tbtn.lg{width:62px;height:62px;font-size:12px}
+  #joy{position:absolute;left:20px;bottom:26px;width:120px;height:120px;border-radius:50%;border:2px solid rgba(201,185,138,.4);background:rgba(20,16,26,.35);pointer-events:auto;touch-action:none}
+  #joyknob{position:absolute;left:40px;top:40px;width:40px;height:40px;border-radius:50%;background:rgba(230,192,48,.55)}
+  #touchtoggle{position:fixed;right:8px;bottom:6px;z-index:11;font:11px 'Courier New',monospace;color:#c9b98a;opacity:.5;background:rgba(20,16,26,.6);border:1px solid rgba(201,185,138,.4);border-radius:4px;padding:3px 6px;pointer-events:auto;cursor:pointer}
 </style>
 </head>
 <body>
@@ -729,6 +738,47 @@
   function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } drawAll(); }
   function frame(now){ tick(now); requestAnimationFrame(frame); }
   requestAnimationFrame(frame); setInterval(()=>tick(performance.now()),1000/30);
+
+  // ---- touch controls ----
+  const TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints>0);
+  function bindBtn(el,action){
+    const dn=e=>{ if(e&&e.cancelable) e.preventDefault(); audioInit(); if(!keys[action]) pressed[action]=true; keys[action]=true; el.classList.add('on'); };
+    const up=e=>{ if(e&&e.cancelable) e.preventDefault(); keys[action]=false; el.classList.remove('on'); };
+    el.addEventListener('touchstart',dn,{passive:false}); el.addEventListener('touchend',up); el.addEventListener('touchcancel',up);
+    el.addEventListener('mousedown',dn); el.addEventListener('mouseup',up); el.addEventListener('mouseleave',up);
+  }
+  function buildTouch(){
+    if(document.getElementById('touch')) return document.getElementById('touch');
+    const root=document.createElement('div'); root.id='touch'; document.body.appendChild(root);
+    const joy=document.createElement('div'); joy.id='joy'; const knob=document.createElement('div'); knob.id='joyknob'; joy.appendChild(knob); root.appendChild(joy);
+    let jid=null;
+    const setDir=(dx,dy)=>{ const th=16, s={left:dx<-th,right:dx>th,up:dy<-th,down:dy>th}; for(const a in s){ if(s[a]&&!keys[a]) pressed[a]=true; keys[a]=s[a]; } };
+    const clearDir=()=>{ ['left','right','up','down'].forEach(a=>keys[a]=false); knob.style.left='40px'; knob.style.top='40px'; };
+    const jmove=(cx,cy)=>{ const r=joy.getBoundingClientRect(); let dx=cx-(r.left+r.width/2), dy=cy-(r.top+r.height/2); const m=Math.hypot(dx,dy),mx=r.width/2-6; if(m>mx){dx*=mx/m;dy*=mx/m;} knob.style.left=(40+dx*0.66)+'px'; knob.style.top=(40+dy*0.66)+'px'; setDir(dx,dy); };
+    joy.addEventListener('touchstart',e=>{ e.preventDefault(); audioInit(); const t=e.changedTouches[0]; jid=t.identifier; jmove(t.clientX,t.clientY); },{passive:false});
+    joy.addEventListener('touchmove',e=>{ e.preventDefault(); for(const t of e.changedTouches){ if(t.identifier===jid) jmove(t.clientX,t.clientY); } },{passive:false});
+    const jend=e=>{ for(const t of e.changedTouches){ if(t.identifier===jid){ jid=null; clearDir(); } } };
+    joy.addEventListener('touchend',jend); joy.addEventListener('touchcancel',jend);
+    let jmouse=false;
+    joy.addEventListener('mousedown',e=>{ e.preventDefault(); jmouse=true; jmove(e.clientX,e.clientY); });
+    window.addEventListener('mousemove',e=>{ if(jmouse) jmove(e.clientX,e.clientY); });
+    window.addEventListener('mouseup',()=>{ if(jmouse){ jmouse=false; clearDir(); } });
+    const mk=(label,cls,style,action)=>{ const b=document.createElement('div'); b.className='tbtn '+cls; b.textContent=label; Object.assign(b.style,style); root.appendChild(b); bindBtn(b,action); return b; };
+    mk('LT','lg',{right:'92px',bottom:'66px'},'light');
+    mk('HV','lg',{right:'24px',bottom:'34px'},'heavy');
+    mk('BLK','lg',{right:'152px',bottom:'34px'},'block');
+    mk('ROLL','sm',{right:'126px',bottom:'132px'},'dodge');
+    mk('GRB','sm',{right:'62px',bottom:'136px'},'grab');
+    mk('SHLD','sm',{right:'200px',bottom:'108px'},'sthrow');
+    mk('ART','sm',{right:'16px',bottom:'120px'},'art');
+    mk('❚❚','sm',{right:'12px',top:'12px'},'pause');
+    return root;
+  }
+  (function initTouch(){
+    const root=buildTouch(); if(TOUCH) root.classList.add('on');
+    const tog=document.createElement('div'); tog.id='touchtoggle'; tog.textContent='touch'; document.body.appendChild(tog);
+    tog.addEventListener('click',()=>root.classList.toggle('on'));
+  })();
 
   window.__ironclad={
     get p(){return player;}, get e(){return enemies[0];}, get enemies(){return enemies;}, get game(){return game;},

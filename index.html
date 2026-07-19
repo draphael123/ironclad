@@ -88,6 +88,9 @@
 
   // ---- Stage script: gates trigger screen-lock encounters ----
   // ---- WORLD → LEVELS (level-slot architecture; add worlds by extending WORLDS) ----
+  const ICE={armor:'#5a7fa0',trim:'#c4e4f2',dark:'#28384a',skin:'#c99a6a',plume:'#8fc0e0',weap:'#eaf4fc'};
+  const ICE2={armor:'#6a6a8c',trim:'#c8c8e8',dark:'#2a2a3c',skin:'#c08a5a',plume:'#a8d4ff',weap:'#eaeefc'};
+  const BOSSICE={armor:'#7fa8d4',trim:'#e4f2ff',dark:'#2a3a54',skin:'#d0b090',plume:'#c4e8ff',weap:'#f2f8ff'};
   const FOREST = {
     name:'THE FOREST',
     levels:[
@@ -106,22 +109,43 @@
     ],
     boss:{type:'captain', name:'THE FOREST WARDEN', sub:'Guardian of the Wood', hp:440,
       pal:{armor:'#3f6b3a',trim:'#9ad09a',dark:'#182e18',skin:'#c8a874',plume:'#e6c030',weap:'#e2eede'}},
+    bossLevel:{name:"THE WARDEN'S GLADE", theme:'glade', song:'boss'},
   };
-  const WORLDS=[FOREST];
-  function buildLevel(li){ const L=FOREST.levels[li]; const gates=[]; let x=500;
+  const FROST = {
+    name:'FROSTVALE',
+    levels:[
+      { name:'SNOWFIELD PATH', song:'forest1', theme:'snow',
+        encounters:[ [['grunt','grunt']], [['grunt','spearman']] ],
+        mini:{type:'shieldbreaker', name:'FROSTBITE', sub:'Warden of the Drift', hp:290, traits:{armor:true}, pal:ICE} },
+      { name:'GLACIER GROVE', song:'forest3', theme:'glacier',
+        encounters:[ [['spearman','grunt']], [['grunt','grunt','grunt']] ],
+        mini:{type:'spearman', name:'RIME', sub:'Icespear Duelist', hp:210, traits:{savage:true}, pal:ICE} },
+      { name:'BLIZZARD RIDGE', song:'forest3', theme:'blizzard',
+        encounters:[ [['berserker','grunt']], [['shieldbreaker','spearman']] ],
+        mini:{type:'berserker', name:'AVALANCHE', sub:'The Unbroken', hp:320, traits:{savage:true}, pal:ICE2} },
+      { name:'CRYSTAL CAVERNS', song:'boss', theme:'crystal',
+        encounters:[ [['shieldbreaker','berserker']], [['spearman','spearman','grunt']] ],
+        mini:{type:'shieldbreaker', name:'GLACIUS', sub:'Crystalborn', hp:380, traits:{giant:true}, pal:ICE} },
+    ],
+    boss:{type:'captain', name:'THE HOARFROST KING', sub:'Sovereign of the Frozen Waste', hp:520, pal:BOSSICE},
+    bossLevel:{name:'THE FROZEN THRONE', theme:'frostglade', song:'boss'},
+  };
+  const WORLDS=[FOREST, FROST];
+  function curWorld(){ return WORLDS[game.worldIdx||0]; }
+  function buildLevel(li){ const L=curWorld().levels[li]; const gates=[]; let x=500;
     L.encounters.forEach(waves=>{ gates.push({x, waves, done:false, started:false}); x+=500; });
     gates.push({x, mini:L.mini, done:false, started:false});
     return { name:L.name, song:L.song, theme:L.theme, len:x+170, gates, boss:false, idx:li }; }
-  function buildBossLevel(){ return { name:"THE WARDEN'S GLADE", song:'boss', theme:'glade', len:840, boss:true,
-    gates:[{x:540, worldboss:FOREST.boss, adds:[['grunt','grunt']], done:false, started:false}] }; }
+  function buildBossLevel(){ const w=curWorld(), bl=w.bossLevel; return { name:bl.name, song:bl.song, theme:bl.theme, len:840, boss:true,
+    gates:[{x:540, worldboss:w.boss, adds:[['grunt','grunt']], done:false, started:false}] }; }
   function loadLevel(li){
-    const lv = li>=FOREST.levels.length ? buildBossLevel() : buildLevel(li);
+    const w=curWorld(); const lv = li>=w.levels.length ? buildBossLevel() : buildLevel(li);
     game.levelIdx=li; game.level=lv; game.gateIdx=0; game.waveIdx=0; game.levelLen=lv.len; game.levelName=lv.name; game.theme=lv.theme; game.song=lv.song;
     game.lock=false; game.progressWall=0; game.camX=0;
     player.x=60; player.vx=0; player.vy=0; player.state='idle';
     enemies.length=0; shots.length=0; pickups.length=0; props.length=0;
     for(let bx=280,k=0; bx<lv.len-200; bx+=Math.round(300+((k*97)%150)),k++){ props.push({x:bx,y:FLOOR_TOP+18+((k%3)*24),broken:0,t:0}); }
-    banner(FOREST.name+'  ·  '+lv.name, '#a9e5a9'); msgT=120;
+    banner(w.name+'  ·  '+lv.name, '#a9e5a9'); msgT=120;
   }
   function spawnBoss(def){ const e=spawnEnemy(def.type, game.camX+W-60, 238); if(!e) return e;
     e.boss=true; e.name=def.name;
@@ -182,7 +206,7 @@
       build:{helm:'crest',cape:'#c94f4f',shield:'kite',pauld:'plate',bulk:1.0},
       pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
     enemies=[];
-    game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
+    game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, worldIdx:0, nextWorld:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
     shots.length=0; pickups.length=0; props.length=0;
     hitstop=0; shake=0; msg=''; msgT=0; msgCol='#e8dcc0';
     if(mode==='endless'){ player.x=W/2; game.lock=true; game.levelLen=W; startEndlessWave(); }
@@ -399,13 +423,14 @@
       if(livingFoes()===0 && enemies.every(e=>e.deadT>20 || e.state!=='dead')){
         if(gate.waves){ g.waveIdx++; if(g.waveIdx<gate.waves.length){ spawnWave(gate.waves[g.waveIdx]); return; } }
         g.lock=false; gate.done=true; g.progressWall=gate.x-40;
-        if(gate.worldboss){ g.state='clear'; banner('THE FOREST IS CLEARED — press R','#a9e5a9'); msgT=999; SFX.win(); return; }
+        if(gate.worldboss){ SFX.win(); if(game.worldIdx+1<WORLDS.length){ worldComplete(game.worldIdx+1); } else { g.state='clear'; banner('ALL WORLDS CLEARED — press R','#a9e5a9'); msgT=999; } return; }
         if(gate.mini){ SFX.win(); levelComplete(g.levelIdx+1); g.gateIdx++; return; }
         offerUpgrade(); g.gateIdx++;
       }
     }
   }
   function levelComplete(nextIdx){ game.state='levelclear'; game.nextLevel=nextIdx; game.levelClearT=0; banner('LEVEL COMPLETE','#a9e5a9'); msgT=999; }
+  function worldComplete(nw){ game.state='worldclear'; game.nextWorld=nw; game.levelClearT=0; banner(curWorld().name+' CLEARED','#a9e5a9'); msgT=999; }
   function spawnWave(list){ list.forEach((t,i)=>{ const e=spawnEnemy(t, game.camX+W-30+i*34, FLOOR_TOP+24+i*22);
     if(e&&game.mode==='campaign'&&game.levelIdx>=1&&Math.random()<0.30){ const ks=Object.keys(ELITES); makeElite(e, ks[Math.floor(Math.random()*ks.length)]); } }); }
 
@@ -432,6 +457,7 @@
       clearPressed(); return;
     }
     if(game.state==='levelclear'){ game.levelClearT++; if(game.levelClearT>150 || pressed.confirm || pressed.light){ game.state='play'; loadLevel(game.nextLevel); } clearPressed(); return; }
+    if(game.state==='worldclear'){ game.levelClearT++; if(game.levelClearT>200 || pressed.confirm || pressed.light){ game.worldIdx=game.nextWorld; game.state='play'; loadLevel(0); } clearPressed(); return; }
     if(game.state==='gameover'||game.state==='clear'){ if(pressed.reset) reset(game.mode); clearPressed(); if(msgT<900) msgT=999; return; }
 
     if(hitstop>0){ hitstop--; for(const pt of parts){ pt.x+=pt.vx*0.2; pt.y+=pt.vy*0.2; } clearPressed(); return; }
@@ -586,6 +612,11 @@
     thorn:{ sky:['#241a12','#3a2816','#4e3820'], hz:'#33240f', trunk:'#1c1208', can1:'#4a3016', can2:'#704c22', floor:'#352612', floor2:'#241a0c', fog:'rgba(200,150,80,.06)', mote:'#f0c460', ray:'rgba(255,200,120,.08)', leaf:'#c07830' },
     roots:{ sky:['#140f22','#221a34','#302442'], hz:'#20182e', trunk:'#0e0a18', can1:'#241a34', can2:'#38284e', floor:'#241a32', floor2:'#150f22', fog:'rgba(150,120,200,.08)', mote:'#c090ff', ray:'rgba(160,120,240,.06)', leaf:'#9a6ad0' },
     glade:{ sky:['#12220f','#1e3618','#2c4c22'], hz:'#243a18', trunk:'#0e1c0c', can1:'#24401e', can2:'#3c6428', floor:'#26401a', floor2:'#182a0e', fog:'rgba(170,220,120,.12)', mote:'#daff90', ray:'rgba(220,255,150,.10)', leaf:'#7ac040' },
+    snow:{ sky:['#243448','#3a5270','#5478a0'], hz:'#4a6484', trunk:'#33465a', can1:'#dfeaf4', can2:'#f2f8fe', floor:'#c6d8ea', floor2:'#93aecb', fog:'rgba(230,240,252,.14)', mote:'#f0f8ff', ray:'rgba(230,245,255,.10)', leaf:'#ffffff' },
+    glacier:{ sky:['#14283a','#1e3e56','#2e5a78'], hz:'#2e5068', trunk:'#24414f', can1:'#8fcadf', can2:'#b4e6f2', floor:'#a8cadd', floor2:'#6e97b4', fog:'rgba(200,235,245,.13)', mote:'#d8f4ff', ray:'rgba(200,240,255,.09)', leaf:'#cdeeff' },
+    blizzard:{ sky:['#2a3644','#455568','#647890'], hz:'#556680', trunk:'#3a4656', can1:'#c8d4e0', can2:'#e6eef6', floor:'#b8c6d4', floor2:'#8898aa', fog:'rgba(238,242,250,.24)', mote:'#ffffff', ray:'rgba(240,244,250,.05)', leaf:'#ffffff' },
+    crystal:{ sky:['#0e1424','#181f38','#232c4e'], hz:'#1a2038', trunk:'#12182a', can1:'#2e4278', can2:'#4058a8', floor:'#1e2640', floor2:'#12182a', fog:'rgba(120,160,240,.09)', mote:'#7fd0ff', ray:'rgba(120,180,255,.09)', leaf:'#8fd8ff' },
+    frostglade:{ sky:['#16283e','#254264','#37628e'], hz:'#2e4e70', trunk:'#28425a', can1:'#b0dcf0', can2:'#d8f2ff', floor:'#b0d0e8', floor2:'#7ea4c4', fog:'rgba(220,240,255,.16)', mote:'#e8f8ff', ray:'rgba(220,245,255,.12)', leaf:'#ffffff' },
   };
   function blob(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fill(); }
   function treeRow(cam,par,sx,sy,spacing,baseY,scale,trunk,can1,can2,sway){
@@ -696,9 +727,14 @@
     // level-complete transition
     if(game.state==='levelclear'){ ctx.fillStyle='rgba(8,14,8,.82)'; ctx.fillRect(0,0,W,H); ctx.textAlign='center';
       ctx.fillStyle='#a9e5a9'; ctx.font='20px "Courier New"'; ctx.fillText('LEVEL COMPLETE',W/2,H/2-14);
-      const nx=game.nextLevel, nm = nx>=FOREST.levels.length?"THE WARDEN'S GLADE — BOSS":FOREST.levels[nx].name;
+      const nx=game.nextLevel, w=curWorld(), nm = nx>=w.levels.length?(w.bossLevel.name+' — BOSS'):w.levels[nx].name;
       ctx.fillStyle='#e6c030'; ctx.font='11px "Courier New"'; ctx.fillText('NEXT — '+nm,W/2,H/2+8);
       if(performance.now()%900<560){ ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.fillText('press '+keyName(BIND.light)+' / A to continue',W/2,H/2+28); } ctx.textAlign='left'; }
+    if(game.state==='worldclear'){ ctx.fillStyle='rgba(6,10,16,.9)'; ctx.fillRect(0,0,W,H); ctx.textAlign='center';
+      ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText(WORLDS[game.worldIdx].name+' CLEARED',W/2,H/2-30);
+      ctx.fillStyle='#dff0ff'; ctx.font='22px "Courier New"'; ctx.fillText('NEW REALM',W/2,H/2-4);
+      ctx.fillStyle='#8fd0ff'; ctx.font='14px "Courier New"'; ctx.fillText('▶  '+WORLDS[game.nextWorld].name+'  ◀',W/2,H/2+20);
+      if(performance.now()%900<560){ ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.fillText('press '+keyName(BIND.light)+' / A to enter',W/2,H/2+42); } ctx.textAlign='left'; }
     // tutorial prompt
     if(game.mode==='tutorial'){ const step=TUT[game.tutStep];
       ctx.fillStyle='rgba(12,10,16,.82)'; ctx.fillRect(0,H-30,W,30); ctx.textAlign='center';

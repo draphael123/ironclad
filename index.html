@@ -135,7 +135,7 @@
   const FROST = {
     name:'FROSTVALE',
     levels:[
-      { name:'SNOWFIELD PATH', song:'forest1', theme:'snow',
+      { name:'SNOWFIELD PATH', song:'frost1', theme:'snow',
         encounters:[ [['grunt','archer']], [['spearman','grunt']] ],
         mini:{type:'shieldbreaker', name:'FROSTBITE', sub:'Warden of the Drift', hp:290, traits:{armor:true}, pal:ICE} },
       { name:'GLACIER GROVE', song:'forest3', theme:'glacier',
@@ -993,7 +993,7 @@
     mnote(ARP[t%ARP.length]*(t%8<4?1:1.5),0.11,'square',0.12); musicStep++; },220); }
 
   // ---- orchestral track manager (real files, procedural fallback) ----
-  const TRACKFILE={ title:'title', forest1:'forest1', forest2:'forest3', forest3:'forest3', forest4:'boss', boss:'boss' };
+  const TRACKFILE={ title:'title', forest1:'forest1', forest2:'forest2', forest3:'forest3', forest4:'forest4', frost1:'frost1', boss:'boss' };
   const audioTracks={}; let curTrackName=null, usingFile=false;
   function desiredTrack(){ if(scene!=='play') return 'title'; if(game&&game.mode==='endless') return 'boss'; if(game&&game.mode==='tutorial') return 'forest1'; return (game&&game.song)||'forest1'; }
   function playTrack(name){
@@ -1074,7 +1074,7 @@
     logo(72); ['START','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,112+i*17,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST+(PROGRESS.rank>=0?'    FURTHEST  W'+(PROGRESS.world+1)+'·L'+(PROGRESS.level+1):''),W/2,H-24);
     if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); }
-    ctx.fillStyle='#5a5344'; ctx.font='6px "Courier New"'; ctx.fillText('music: Thalon · OpenGameArt (CC-BY / CC0)',W/2,H-2); ctx.textAlign='left'; }
+    ctx.fillStyle='#5a5344'; ctx.font='6px "Courier New"'; ctx.fillText('music: Thalon · Z. Noriega · Bertram · OpenGameArt / Valyria Tear (CC-BY / CC0)',W/2,H-2); ctx.textAlign='left'; }
   function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
     const rows=[['Move','Arrows / WASD'],['Dodge roll','Shift  (i-frames)'],['Dash','double-tap ◀ or ▶'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy / Launcher',keyName(BIND.heavy)+'  ·  ↑+'+keyName(BIND.heavy)+' juggles'],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block / Parry',keyName(BIND.block)+'/Space, tap=parry'],['Shield throw','U  (boomerang, cooldown)'],["Knight's Art",'O  (spend full Valor)'],['Pause','Esc / P']];
     rows.forEach((r,i)=>{ const y=74+i*15; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],96,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],210,y); });

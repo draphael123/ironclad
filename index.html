@@ -362,7 +362,7 @@
   }
   // ---- enemy ranged + charge → the player ----
   function hurtPlayer(dmg,dir,unblock){ const p=player;
-    if(p.state==='dead'||p.invul>0||p.state==='roll'||p.state==='dash') return;   // i-frames / rolling dodges everything
+    if(p.state==='dead'||p.invul>0||p.state==='roll'||p.state==='dash'||p.state==='sidestep') return;   // i-frames / dodges everything
     if(!unblock && p.state==='block' && p.face===-Math.sign(dir)){ p.flash=4; if(p.parryWindow>0){ /* no parry vs ranged/charge */ } fx(3,frontX(p),p.y-16,'#cfe0ff',5); shake=Math.max(shake,2); SFX.block(); return; }
     dmg=Math.round(dmg*(1+(game.worldIdx||0)*0.2)*(p.dmgMult||1)*diffMult()); p.hp-=dmg; p.vx=Math.sign(dir||1)*4; p.state='hit'; p.hitStun=12; p.invul=8; p.flash=6;
     fx(7,p.x,p.y-16,'#ff9a4b',9); dmgFloat(p.x,p.y-24,dmg,false); shake=Math.max(shake,5); SFX.hit(dmg>12);
@@ -397,6 +397,9 @@
     if(f.state==='roll'){ f.rollT++; f.x+=f.vx; f.vx*=0.9; f.invul=Math.max(f.invul,2);
       if(f.isPlayer&&f.rollT>12&&(pressed.light||pressed.heavy)){ startAttack(f, pressed.heavy?'heavy':'light1'); return; }
       if(f.rollT>17) f.state='idle'; clampPos(f); return; }
+    if(f.state==='sidestep'){ f.stepT++; f.x+=f.vx; f.vx*=0.82; f.y+=f.stepVy; f.stepVy*=0.84; f.z=Math.max(0,(f.z||0)+(f.stepT<4?0.85:-0.7)); f.invul=Math.max(f.invul,2);
+      if(f.isPlayer&&f.stepT>7&&(pressed.light||pressed.heavy)){ f.z=0; startAttack(f, pressed.heavy?'heavy':'light1'); return; }   // cancel into attack
+      if(f.stepT>10){ f.z=0; f.state='idle'; } clampPos(f); return; }
     if(f.state==='air'){ f.z+=f.zv; f.zv-=0.5; f.x+=f.vx; f.vx*=0.96;
       if(f.z<=0){ f.z=0; f.state='down'; f.downT=0; f.stunT=26; f.vx*=0.4; f.squash=8; for(let k=0;k<7;k++) parts.push({x:f.x+(Math.random()-.5)*12,y:f.y,vx:(Math.random()-.5)*3,vy:-Math.random()*1.5,life:14,col:'#6a5a44'}); } clampPos(f); return; }
     if(f.state==='art'){ f.artT++; f.invul=3; f.vx*=0.8; f.x+=f.vx;
@@ -414,7 +417,9 @@
       if(pressed.left||pressed.right){ const d=pressed.right?1:-1;
         if(f.tapDir===d&&f.tapT>0){ f.state='dash'; f.dashT=0; f.face=d; f.vx=d*4.6; f.invul=11; f.tapT=0; SFX.whoosh(); return; }
         f.tapDir=d; f.tapT=13; }
-      if(pressed.dodge){ const d=(keys.left?-1:keys.right?1:-f.face); if(keys.left||keys.right) f.face=(keys.right?1:-1); f.state='roll'; f.rollT=0; f.vx=d*4.3; f.invul=18; SFX.whoosh(); return; }
+      if(pressed.dodge){ // quick sidestep hop on the depth axis (↑/↓), brief i-frames — no roll
+        const dv=keys.up?-1:keys.down?1:(f.y>(FLOOR_TOP+FLOOR_BOT)/2?-1:1); if(keys.left||keys.right) f.face=(keys.right?1:-1);
+        f.state='sidestep'; f.stepT=0; f.stepVy=dv*3.6; f.vx=(keys.left?-1:keys.right?1:0)*1.4; f.z=0.1; f.invul=12; SFX.whoosh(); return; }
       if(pressed.art && f.valor>=50){ f.valor-=50; f.state='art'; f.artT=0; f.invul=46; f.vx=0; SFX.win(); banner("KNIGHT'S ART!",'#e6c030'); return; }
       if(pressed.sthrow && f.hasShield && f.shieldCd<=0){ throwShield(f); return; }
       if(pressed.grab){ startAttack(f,'grab'); return; }
@@ -601,25 +606,25 @@
     ctx.save();
     ctx.globalCompositeOperation='source-atop';
     // horizontal: warm key on the front (-x) → cool shadow on the back (+x)
-    const kh=sub?0.15:0.28, sh=sub?0.20:0.38;
+    const kh=sub?0.24:0.32, sh=sub?0.32:0.42;
     const gh=ctx.createLinearGradient(-tw-8,0,tw+8,0);
-    gh.addColorStop(0.00,'rgba(255,240,206,'+kh+')');
-    gh.addColorStop(0.42,'rgba(255,240,206,0)');
-    gh.addColorStop(0.58,'rgba(14,18,32,0)');
-    gh.addColorStop(1.00,'rgba(14,18,32,'+sh+')');
+    gh.addColorStop(0.00,'rgba(255,238,200,'+kh+')');
+    gh.addColorStop(0.40,'rgba(255,238,200,0)');
+    gh.addColorStop(0.56,'rgba(12,16,30,0)');
+    gh.addColorStop(1.00,'rgba(12,16,30,'+sh+')');
     ctx.fillStyle=gh; ctx.fillRect(fx,fy,fw,fh);
     // vertical: soft sky-light up top, ambient occlusion pooling at the feet
-    const kt=sub?0.10:0.17, ao=sub?0.16:0.30;
+    const kt=sub?0.15:0.19, ao=sub?0.24:0.32;
     const gv=ctx.createLinearGradient(0,-56,0,2);
     gv.addColorStop(0.00,'rgba(238,246,255,'+kt+')');
-    gv.addColorStop(0.55,'rgba(0,0,0,0)');
+    gv.addColorStop(0.52,'rgba(0,0,0,0)');
     gv.addColorStop(1.00,'rgba(0,0,0,'+ao+')');
     ctx.fillStyle=gv; ctx.fillRect(fx,fy,fw,fh);
+    // rim light catching the lit edge — now on both tiers for a clearer sculpted read
+    const gr=ctx.createLinearGradient(-tw-8,0,-tw*0.15,0);
+    gr.addColorStop(0,'rgba(255,250,236,'+(sub?0.42:0.55)+')'); gr.addColorStop(1,'rgba(255,250,236,0)');
+    ctx.fillStyle=gr; ctx.fillRect(fx,-60,fw*0.4,64);
     if(!sub){
-      // rim light catching the lit edge
-      const gr=ctx.createLinearGradient(-tw-8,0,-tw*0.2,0);
-      gr.addColorStop(0,'rgba(255,250,236,0.5)'); gr.addColorStop(1,'rgba(255,250,236,0)');
-      ctx.fillStyle=gr; ctx.fillRect(fx,-60,fw*0.4,64);
       // dithered terminator band — 16-bit stipple across the shadow shoulder of the torso/hips
       ctx.fillStyle='rgba(18,24,40,0.5)';
       const dx0=Math.round(tw*0.2);
@@ -641,6 +646,7 @@
     if(dead){ ctx.rotate(Math.min(1.4,f.deadT*0.05)); ctx.globalAlpha=Math.max(.3,1-f.deadT*0.012); }
     if(down){ ctx.rotate(Math.min(1.3,f.downT*0.09)); }
     if(f.state==='roll'){ ctx.translate(0,-16); ctx.rotate((f.rollT/17)*6.283); ctx.translate(0,16); }
+    if(f.state==='sidestep'){ ctx.rotate((f.stepVy||0)*0.035); const sp=Math.sin(Math.min(1,f.stepT/10)*Math.PI); ctx.scale(1+sp*0.06,1-sp*0.05); }   // hop lean + squash, no roll
     if(f.state==='idle'){ ctx.translate(0, Math.sin(now2/520)*0.6); ctx.rotate(Math.sin(now2/700)*0.016); }   // breathing + sway
     if(f.state==='walk'){ const wk=Math.sin(now2/85); ctx.translate(0,-Math.abs(wk)*1.5); ctx.rotate(wk*0.045); }   // bounce + body sway
     if(f.state==='windup'){ ctx.translate(-wp*3, wp*1.6); }   // coil back + crouch (the tell)
@@ -1014,8 +1020,16 @@
   loadCfg();
 
   // ---- scene / menu state ----
-  let scene='title', menu={idx:0}, settingsFrom='title';
+  let scene='intro', menu={idx:0}, settingsFrom='title';
+  let introT=0, introKnight=null;
+  const TITLEMENU=['START','LEVEL SELECT','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'];
   const SET=['SFX Volume','Music','Rebind Light','Rebind Heavy','Rebind Grab','Rebind Block','Screen Shake','Damage Numbers','Particle Density','Difficulty','Back'];
+  let lsW=0, lsL=0;   // level-select cursor (world, level)
+  // start a campaign run at a specific world/level (used by level select)
+  function startAtLevel(w,l){ reset('campaign'); game.worldIdx=w; game.nextWorld=w; loadLevel(l); scene='play'; }
+  // levels selectable per world = the regular levels (bosses reached by clearing the last one)
+  function worldLevelCount(w){ return WORLDS[w].levels.length; }
+  function levelUnlocked(w,l){ return (w*100+l) <= (PROGRESS.rank<0?0:PROGRESS.rank); }
   function cyc(arr,val,dir){ let i=arr.indexOf(val); if(i<0)i=0; return arr[(i+dir+arr.length)%arr.length]; }
   const RB=['light','heavy','grab','block'];
   const keyName=c=>String(c).replace('Key','').replace('Digit','').replace('Arrow','');
@@ -1045,8 +1059,21 @@
   }
   function menuUpdate(){
     const up=pressed.up,dn=pressed.down,lf=pressed.left,rt=pressed.right,ok=pressed.confirm||pressed.block||pressed.light,back=pressed.pause;
-    if(scene==='title'){ const n=6; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
-      if(ok){ SFX.select(); if(menu.idx===0)startRun('campaign'); else if(menu.idx===1)startRun('endless'); else if(menu.idx===2)startRun('tutorial'); else if(menu.idx===3){ scene='bestiary'; menu.idx=0; } else if(menu.idx===4)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    if(scene==='intro'){ introT++; const anyKey=up||dn||lf||rt||ok||back||pressed.heavy||pressed.grab||pressed.reset;
+      if(introT>250||anyKey){ scene='title'; menu.idx=0; } clearPressed(); return; }
+    if(scene==='title'){ const n=TITLEMENU.length; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(ok){ SFX.select(); const s=TITLEMENU[menu.idx];
+        if(s==='START')startRun('campaign'); else if(s==='LEVEL SELECT'){ scene='levelselect'; lsW=0; lsL=0; }
+        else if(s==='ENDLESS')startRun('endless'); else if(s==='TUTORIAL')startRun('tutorial');
+        else if(s==='BESTIARY'){ scene='bestiary'; menu.idx=0; } else if(s==='CONTROLS')scene='controls';
+        else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    else if(scene==='levelselect'){ const nw=WORLDS.length;
+      if(lf){ lsW=(lsW+nw-1)%nw; lsL=Math.min(lsL,worldLevelCount(lsW)-1); SFX.select(); }
+      if(rt){ lsW=(lsW+1)%nw; lsL=Math.min(lsL,worldLevelCount(lsW)-1); SFX.select(); }
+      if(up){ lsL=(lsL+worldLevelCount(lsW)-1)%worldLevelCount(lsW); SFX.select(); }
+      if(dn){ lsL=(lsL+1)%worldLevelCount(lsW); SFX.select(); }
+      if(ok){ if(levelUnlocked(lsW,lsL)){ SFX.select(); startAtLevel(lsW,lsL); } else SFX.block(); }
+      if(back){ SFX.select(); scene='title'; menu.idx=1; } }
     else if(scene==='bestiary'){ const n=BEST.length; if(up||lf)menu.idx=(menu.idx+n-1)%n; if(dn||rt)menu.idx=(menu.idx+1)%n; if(up||dn||lf||rt)SFX.select(); if(back||pressed.confirm){ SFX.select(); scene='title'; menu.idx=3; } }
     else if(scene==='controls'){ if(ok||back){ SFX.select(); scene='title'; } }
     else if(scene==='pause'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
@@ -1069,16 +1096,16 @@
   function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
   function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
-  const BUILD='2026-07-19 · visuals+audio+systems+music';
+  const BUILD='2026-07-19b · level-select · intro · sidestep · sprites+';
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.textAlign='left'; ctx.fillStyle='#4a8fce'; ctx.font='7px "Courier New"'; ctx.fillText('build '+BUILD, 6, 12);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
-    logo(72); ['START','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,112+i*17,menu.idx===i));
+    logo(66); TITLEMENU.forEach((o,i)=>opt(o,W/2,104+i*15,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST+(PROGRESS.rank>=0?'    FURTHEST  W'+(PROGRESS.world+1)+'·L'+(PROGRESS.level+1):''),W/2,H-24);
     if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); }
     ctx.fillStyle='#5a5344'; ctx.font='6px "Courier New"'; ctx.fillText('music: Thalon · Z. Noriega · Bertram · OpenGameArt / Valyria Tear (CC-BY / CC0)',W/2,H-2); ctx.textAlign='left'; }
   function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
-    const rows=[['Move','Arrows / WASD'],['Dodge roll','Shift  (i-frames)'],['Dash','double-tap ◀ or ▶'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy / Launcher',keyName(BIND.heavy)+'  ·  ↑+'+keyName(BIND.heavy)+' juggles'],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block / Parry',keyName(BIND.block)+'/Space, tap=parry'],['Shield throw','U  (boomerang, cooldown)'],["Knight's Art",'O  (spend full Valor)'],['Pause','Esc / P']];
+    const rows=[['Move','Arrows / WASD'],['Sidestep','Shift + ↑/↓  (i-frame hop)'],['Dash','double-tap ◀ or ▶'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy / Launcher',keyName(BIND.heavy)+'  ·  ↑+'+keyName(BIND.heavy)+' juggles'],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block / Parry',keyName(BIND.block)+'/Space, tap=parry'],['Shield throw','U  (boomerang, cooldown)'],["Knight's Art",'O  (spend full Valor)'],['Pause','Esc / P']];
     rows.forEach((r,i)=>{ const y=74+i*15; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],96,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],210,y); });
     ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.fillText('press ENTER to go back',W/2,232); ctx.textAlign='left'; }
   function overlayMenu(title,opts){ ctx.fillStyle='rgba(0,0,0,.62)'; ctx.fillRect(0,0,W,H); panel(140,58,200,154); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='15px "Courier New"'; ctx.fillText(title,W/2,88); ctx.textAlign='left'; opts.forEach((o,i)=>opt(o,W/2,120+i*22,menu.idx===i)); }
@@ -1150,7 +1177,58 @@
     const dn=BEST.reduce((s,b)=>s+(DISCOVERED[b.disp||b.type]?1:0),0);
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='9px "Courier New"'; ctx.fillText('◀ '+(menu.idx+1)+' / '+BEST.length+' ▶    discovered '+dn+'/'+BEST.length+'    ▲▼ browse    ESC / ❚❚ back',W/2,H-14); ctx.textAlign='left'; }
 
-  function drawAll(){ if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
+  function renderIntro(){
+    const t=introT;
+    game.theme='woodland';
+    // slow forest push-in with a little sway
+    const cam=180+t*0.7;
+    drawForest(cam,0,Math.sin(t/40)*1.2);
+    // ground
+    const tf=THEMES.woodland; const fg=ctx.createLinearGradient(0,FLOOR_TOP-4,0,H); fg.addColorStop(0,tf.floor); fg.addColorStop(1,tf.floor2);
+    ctx.fillStyle=fg; ctx.fillRect(0,FLOOR_TOP-4,W,H); ctx.fillStyle='rgba(0,0,0,.14)'; for(let i=1;i<9;i++) ctx.fillRect(0,FLOOR_TOP+i*10,W,1);
+    // lone knight strides in from the left, then holds at centre
+    if(!introKnight) introKnight=makeFighter({x:-40,y:222,face:1,isPlayer:true,hp:100,name:'KNIGHT',weapon:'sword',
+      build:{helm:'crest',cape:'#c94f4f',shield:'kite',pauld:'plate',bulk:1.0},
+      pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
+    const kx=Math.min(W*0.5, -40+t*2.5);
+    introKnight.x=kx; introKnight.y=222; introKnight.face=1; introKnight.size=1.5;
+    introKnight.state = kx<W*0.5-1 ? 'walk' : 'idle';
+    drawKnight(introKnight);
+    // vignette
+    const vg=ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.75); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.5)'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+    // logo slams in
+    const SLAM=118;
+    if(t>=SLAM){ const p=Math.min(1,(t-SLAM)/18), sc=1+(1-p)*(1-p)*2.2;
+      ctx.save(); ctx.globalAlpha=p; ctx.translate(W/2,80); ctx.scale(sc,sc); ctx.translate(-W/2,-80); logo(80); ctx.restore();
+      if(t-SLAM<7){ ctx.fillStyle='rgba(255,246,220,'+(1-(t-SLAM)/7)*0.55+')'; ctx.fillRect(0,0,W,H); }
+      if(t>SLAM+40 && performance.now()%900<560){ ctx.textAlign='center'; ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.fillText('press any key',W/2,H-20); ctx.textAlign='left'; }
+    } else { // early "skip" hint
+      if(performance.now()%1000<500){ ctx.textAlign='center'; ctx.fillStyle='rgba(200,190,170,.6)'; ctx.font='7px "Courier New"'; ctx.fillText('press any key to skip',W/2,H-14); ctx.textAlign='left'; }
+    }
+  }
+  function renderLevelSelect(){
+    const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#120c16'); g0.addColorStop(1,'#1e1628'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText('LEVEL SELECT',W/2,30);
+    const colW=W/WORLDS.length;
+    for(let w=0; w<WORLDS.length; w++){
+      const cx=colW*w+colW/2, wd=WORLDS[w];
+      ctx.textAlign='center'; ctx.fillStyle=w===lsW?'#dff0ff':'#7a7088'; ctx.font='12px "Courier New"'; ctx.fillText(wd.name,cx,58);
+      for(let l=0; l<wd.levels.length; l++){
+        const y=80+l*22, sel=(w===lsW&&l===lsL), unl=levelUnlocked(w,l);
+        if(sel){ ctx.fillStyle='rgba(230,192,48,.16)'; ctx.fillRect(cx-colW*0.42,y-13,colW*0.84,19); }
+        ctx.textAlign='left';
+        ctx.fillStyle=sel?'#e6c030':(unl?'#c9b98a':'#5a5266'); ctx.font='10px "Courier New"';
+        const lx=cx-colW*0.40; ctx.fillText((sel?'▶ ':'  ')+(unl?wd.levels[l].name:'??? LOCKED'),lx,y);
+        if(!unl){ ctx.fillStyle='#4a4458'; ctx.fillText('🔒',cx+colW*0.34,y); }
+      }
+      ctx.strokeStyle='#2a2438'; ctx.beginPath(); ctx.moveTo(cx-colW*0.44,68); ctx.lineTo(cx+colW*0.44,68); ctx.stroke();
+    }
+    const cur=WORLDS[lsW].levels[lsL], unl=levelUnlocked(lsW,lsL);
+    ctx.textAlign='center'; ctx.fillStyle=unl?'#a9e5a9':'#9a6a6a'; ctx.font='9px "Courier New"';
+    ctx.fillText(unl?('ENTER  ·  '+WORLDS[lsW].name+' — '+cur.name):'Reach this level in the campaign to unlock it',W/2,H-30);
+    ctx.fillStyle='#9a8f6a'; ctx.fillText('◀▶ world    ▲▼ level    ENTER start    ESC back',W/2,H-14); ctx.textAlign='left';
+  }
+  function drawAll(){ if(scene==='intro'){ renderIntro(); return; } if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } if(scene==='levelselect'){ renderLevelSelect(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
 
   let last=performance.now(),acc=0;
   function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } updateMusic(); drawAll(); }

@@ -135,18 +135,18 @@
     levels:[
       { name:'WOODLAND PATH', song:'forest1', theme:'woodland',
         encounters:[ [['grunt','grunt']], [['grunt','spearman']] ],
-        mini:{type:'shieldbreaker', name:'OAKFIST', sub:'Bulwark of the Path', hp:240, traits:{armor:true}} },
+        mini:{type:'shieldbreaker', name:'OAKFIST', sub:'Bulwark of the Path', hp:240, traits:{armor:true}, sigs:['slam','charge']} },
       { name:'MISTY GROVE', song:'forest2', theme:'mist',
         encounters:[ [['grunt','archer']], [['spearman','archer','grunt']] ],
-        mini:{type:'archer', name:'DEADEYE', sub:'The Long Shot', hp:150, traits:{}} },
+        mini:{type:'archer', name:'DEADEYE', sub:'The Long Shot', hp:150, traits:{}, sigs:['shards']} },
       { name:'THORNWOOD', song:'forest3', theme:'thorn',
         encounters:[ [['rogue','grunt']], [['berserker','rogue','spearman']] ],
-        mini:{type:'berserker', name:'BRAMBLEHIDE', sub:'The Maddened', hp:270, traits:{savage:true}} },
+        mini:{type:'berserker', name:'BRAMBLEHIDE', sub:'The Maddened', hp:270, traits:{savage:true}, sigs:['spin']} },
       { name:'ANCIENT ROOTS', song:'forest4', theme:'roots',
         encounters:[ [['maul','grunt']], [['shieldbreaker','maul','archer']] ],
-        mini:{type:'maul', name:'IRONBARK', sub:'Root-Warden', hp:340, traits:{}} },
+        mini:{type:'maul', name:'IRONBARK', sub:'Root-Warden', hp:340, traits:{}, sigs:['slam']} },
     ],
-    boss:{type:'captain', name:'THE FOREST WARDEN', sub:'Guardian of the Wood', hp:440,
+    boss:{type:'captain', name:'THE FOREST WARDEN', sub:'Guardian of the Wood', hp:440, worldBoss:true, sigs:['slam','summon','slam'], summon:['grunt','spearman'],
       pal:{armor:'#3f6b3a',trim:'#9ad09a',dark:'#182e18',skin:'#c8a874',plume:'#e6c030',weap:'#e2eede'}},
     bossLevel:{name:"THE WARDEN'S GLADE", theme:'glade', song:'boss'},
   };
@@ -155,18 +155,18 @@
     levels:[
       { name:'SNOWFIELD PATH', song:'frost1', theme:'snow',
         encounters:[ [['grunt','archer']], [['spearman','grunt']] ],
-        mini:{type:'shieldbreaker', name:'FROSTBITE', sub:'Warden of the Drift', hp:290, traits:{armor:true}, pal:ICE} },
+        mini:{type:'shieldbreaker', name:'FROSTBITE', sub:'Warden of the Drift', hp:290, traits:{armor:true}, pal:ICE, sigs:['nova','charge']} },
       { name:'GLACIER GROVE', song:'forest3', theme:'glacier',
         encounters:[ [['lancer','grunt']], [['archer','lancer','spearman']] ],
-        mini:{type:'lancer', name:'GALEFORCE', sub:'The Charging Gale', hp:240, traits:{}, pal:ICE} },
+        mini:{type:'lancer', name:'GALEFORCE', sub:'The Charging Gale', hp:240, traits:{}, pal:ICE, sigs:['nova']} },
       { name:'BLIZZARD RIDGE', song:'forest3', theme:'blizzard',
         encounters:[ [['warlock','grunt']], [['berserker','warlock','archer']] ],
-        mini:{type:'warlock', name:'HEXFROST', sub:'Frost Conjurer', hp:200, traits:{}, pal:ICE2} },
+        mini:{type:'warlock', name:'HEXFROST', sub:'Frost Conjurer', hp:200, traits:{}, pal:ICE2, sigs:['shards','summon'], summon:['archer','grunt']} },
       { name:'CRYSTAL CAVERNS', song:'boss', theme:'crystal',
         encounters:[ [['maul','warlock']], [['lancer','rogue','archer']] ],
-        mini:{type:'shieldbreaker', name:'GLACIUS', sub:'Crystalborn', hp:380, traits:{giant:true}, pal:ICE} },
+        mini:{type:'shieldbreaker', name:'GLACIUS', sub:'Crystalborn', hp:380, traits:{giant:true}, pal:ICE, sigs:['slam','nova']} },
     ],
-    boss:{type:'captain', name:'THE HOARFROST KING', sub:'Sovereign of the Frozen Waste', hp:520, pal:BOSSICE},
+    boss:{type:'captain', name:'THE HOARFROST KING', sub:'Sovereign of the Frozen Waste', hp:520, pal:BOSSICE, worldBoss:true, sigs:['shards','nova','shards','summon'], summon:['archer','warlock']},
     bossLevel:{name:'THE FROZEN THRONE', theme:'frostglade', song:'boss'},
   };
   const WORLDS=[FOREST, FROST];
@@ -183,7 +183,7 @@
     if(game.mode!=='tutorial'){ const rank=(game.worldIdx||0)*100+li; if(rank>PROGRESS.rank){ PROGRESS.rank=rank; PROGRESS.world=game.worldIdx||0; PROGRESS.level=li; saveCfg(); } }   // furthest-reached save
     game.lock=false; game.progressWall=0; game.camX=0;
     player.x=60; player.vx=0; player.vy=0; player.state='idle';
-    enemies.length=0; shots.length=0; pickups.length=0; props.length=0; ebolts.length=0;
+    enemies.length=0; shots.length=0; pickups.length=0; props.length=0; ebolts.length=0; hazards.length=0;
     for(let bx=280,k=0; bx<lv.len-200; bx+=Math.round(300+((k*97)%150)),k++){ props.push({x:bx,y:FLOOR_TOP+18+((k%3)*24),broken:0,t:0}); }
     banner(w.name+'  ·  '+lv.name, '#a9e5a9'); msgT=120;
   }
@@ -192,6 +192,9 @@
     if(def.traits){ if(def.traits.giant) makeElite(e,'giant'); if(def.traits.savage) makeElite(e,'savage'); if(def.traits.armor) e.armor=true; }
     if(def.pal) e.pal=def.pal;
     e.hp=e.maxhp=def.hp; e.elite=null; e.eliteTag=null;
+    // signature-move loadout
+    e.sigs=def.sigs||null; e.summon=def.summon||['grunt','grunt'];
+    e.sigCd=70; e.sigCdMax=def.sigCd||(def.worldBoss?120:170); e.sigTele=def.sigTele||36; e.pendingSig=null; e.phase2=false;
     game.nameCard={t:0,name:def.name,sub:def.sub}; game.punch=1; return e; }
 
   const UPGRADES=[
@@ -230,7 +233,7 @@
   }
 
   let player, enemies, hitstop, shake, msg, msgT, msgCol, game;
-  const shots=[], props=[], pickups=[], ebolts=[];
+  const shots=[], props=[], pickups=[], ebolts=[], hazards=[];
 
   function spawnEnemy(type,x,y){
     const a=ARCH[type]; if(!a) return;
@@ -250,7 +253,7 @@
     if(mode!=='tutorial'){ applyCharStats(player); player.hp=player.maxhp; }   // persistent RPG stats
     enemies=[];
     game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, worldIdx:0, nextWorld:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
-    shots.length=0; pickups.length=0; props.length=0; ebolts.length=0;
+    shots.length=0; pickups.length=0; props.length=0; ebolts.length=0; hazards.length=0;
     hitstop=0; shake=0; msg=''; msgT=0; msgCol='#e8dcc0';
     if(mode==='endless'){ player.x=W/2; game.lock=true; game.levelLen=W; startEndlessWave(); }
     else if(mode==='tutorial'){ player.maxhp=500; player.hp=500; player.x=Math.round(W*0.34); game.tutStartX=player.x; game.tutStep=0; game.lock=true; game.camX=0; game.levelLen=W;
@@ -393,6 +396,24 @@
     if(b.life<=0||b.x<game.camX-40||b.x>game.camX+W+40) ebolts.splice(i,1); } }
   function chargeHitPlayer(f){ hurtPlayer(16,f.face,false); f.vx*=0.4; }
 
+  // ---- boss / miniboss signature moves ----
+  const SIGNAME={slam:'GROUND SLAM',nova:'FROST NOVA',shards:'SHARD VOLLEY',summon:'SUMMON',spin:'WHIRLWIND',charge:'CHARGE'};
+  function bossSummon(f){ const pool=f.summon||['grunt','grunt']; for(let i=0;i<2;i++) spawnEnemy(pool[i%pool.length], f.x-30-i*26, f.y+((i%2)?14:-14));
+    banner((f.name||'BOSS')+' SUMMONS!','#e6c030'); spark(f.x,f.y-16,'#e6c030',16); SFX.grab(); }
+  function doSignature(f,k){
+    if(k==='slam'){ shake=Math.max(shake,9); SFX.hit(true); game.bigFlash=Math.max(game.bigFlash,5); ring(f.x,f.y,'#ffce7a');
+      for(const dir of [1,-1]) hazards.push({kind:'wave',x:f.x+dir*12,y:f.y,vx:dir*3.4,life:70,dmg:15,owner:f,col:'#ffce7a',hit:false});
+      for(let i=0;i<12;i++) parts.push({x:f.x+(Math.random()-.5)*22,y:f.y,vx:(Math.random()-.5)*4,vy:-Math.random()*3.4,life:16+Math.random()*8,col:'#caa06a',sz:2}); }
+    else if(k==='nova'){ shake=Math.max(shake,8); SFX.parry(); const col=(f.pal&&f.pal.trim)||'#bfe6ff';
+      hazards.push({kind:'nova',x:f.x,y:f.y-14,r:10,vr:3.0,life:40,dmg:14,owner:f,col,hit:false});
+      for(let a=0;a<14;a++){ const an=a/14*6.28; parts.push({x:f.x+Math.cos(an)*12,y:f.y-14+Math.sin(an)*6,vx:Math.cos(an)*2.6,vy:Math.sin(an)*1.8,life:16,col,sz:2}); } }
+    else if(k==='shards'){ const kind=(f.ranged==='magic'||f.weapon==='staff')?'magic':'arrow'; for(let i=0;i<3;i++) ebolts.push({x:f.x+f.face*14,y:f.y-8-i*8,vx:f.face*4.4,owner:f,kind,dmg:11,life:150,t:0}); SFX.swing(kind==='magic'?'staff':'bow'); }
+    else if(k==='summon'){ bossSummon(f); }
+    else if(k==='spin'){ shake=Math.max(shake,7); SFX.swing('cleave'); if(Math.abs(player.x-f.x)<48&&Math.abs(player.y-f.y)<depthTol+12) hurtPlayer(15,Math.sign(player.x-f.x)||f.face,false);
+      for(let a=0;a<14;a++){ const an=a/14*6.28; parts.push({x:f.x+Math.cos(an)*22,y:f.y-16+Math.sin(an)*10,vx:Math.cos(an)*3.4,vy:Math.sin(an)*2,life:15,col:'#fff2cf',sz:2}); } ring(f.x,f.y-16,'#ffffff'); ring(f.x,f.y-16,'#ffd66b'); }
+    else if(k==='charge'){ f.state='charge'; f.chargeT=0; f.chargeHit=false; f.vx=f.face*5.4; }
+  }
+
   function bounds(f){
     // dynamic world clamp based on lock + camera
     let lo, hi;
@@ -454,12 +475,20 @@
   function updateAI(f){
     const p=player; if(p.state==='dead'){ f.state='idle'; f.vx=0; return; }
     if(f.enrageAble&&!f.enraged&&f.hp<f.maxhp*0.4){ f.enraged=true; f.spd*=1.45; f.tele=Math.max(10,f.tele-6); f.eliteAura='#ff2010'; banner('SAVAGE ENRAGED!','#ff6a4a'); }
+    if(f.sigCd>0) f.sigCd--;
+    if(f.boss&&!f.phase2&&f.hp>0&&f.hp<f.maxhp*0.5){ f.phase2=true; f.enraged=true; f.spd*=1.22; f.tele=Math.max(9,(f.tele||24)-4); if(f.sigCdMax) f.sigCdMax=Math.round(f.sigCdMax*0.62); f.eliteAura=(f.pal&&f.pal.trim)||'#ff4020'; banner((f.name||'BOSS')+' — PHASE II','#ff6a4a'); game.bigFlash=8; shake=Math.max(shake,10); if(f.summon&&f.sigs&&f.sigs.indexOf('summon')<0) bossSummon(f); f.sigCd=Math.min(f.sigCd,40); }
     const dx=p.x-f.x, dy=p.y-f.y, adx=Math.abs(dx), ady=Math.abs(dy); f.face=dx>=0?1:-1;
     if(f.blockT>0){ f.blockT--; f.state='block'; f.vx*=0.5; f.x+=f.vx; clampPos(f); return; }
     if(f.telegraph>0){ f.telegraph--; f.vx*=0.6; f.x+=f.vx; f.state='windup';
-      if(f.telegraph===0){ if(f.ranged){ fireBolt(f,f.ranged); f.state='idle'; f.think=f.ranged==='magic'?100:64; } else if(f.charge){ f.state='charge'; f.chargeT=0; f.chargeHit=false; f.vx=f.face*5.2; } else startAttack(f,f.swing); }
+      if(f.telegraph===0){ if(f.pendingSig){ const s=f.pendingSig; f.pendingSig=null; doSignature(f,s); if(f.state==='windup'){ f.state='idle'; f.think=f.sigRecover||42; } }
+        else if(f.ranged){ fireBolt(f,f.ranged); f.state='idle'; f.think=f.ranged==='magic'?100:64; } else if(f.charge){ f.state='charge'; f.chargeT=0; f.chargeHit=false; f.vx=f.face*5.2; } else startAttack(f,f.swing); }
       clampPos(f); return; }
     f.think--;
+    // boss/miniboss signature move (telegraphed special on cooldown)
+    if(f.sigs&&f.think<=0&&f.sigCd<=0&&adx<150&&ady<depthTol+60){
+      f.pendingSig=f.sigs[Math.floor(Math.random()*f.sigs.length)];
+      f.telegraph=f.sigTele||36; f.think=110; f.sigCd=f.sigCdMax||160; f.vx=0;
+      banner('⚠ '+(SIGNAME[f.pendingSig]||'SPECIAL'),'#ff9a4b'); clampPos(f); return; }
     if(f.evade&&p.state==='attack'&&adx<44&&ady<depthTol+6&&f.think<=0&&Math.random()<0.55){ f.state='roll'; f.rollT=0; f.vx=-f.face*4.4; f.invul=14; f.think=34; clampPos(f); return; }
     if(f.canBlock&&p.state==='attack'&&adx<48&&ady<depthTol+6&&f.think<=0&&Math.random()<f.canBlock){ f.blockT=20; f.think=48; f.vx=0; clampPos(f); return; }
     if(f.keep>0){
@@ -558,6 +587,10 @@
     for(let i=parts.length-1;i>=0;i--){ const pt=parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=(pt.g!==undefined?pt.g:0.25); pt.vx*=0.98; pt.life--; if(pt.life<=0) parts.splice(i,1); }
     for(let i=rings.length-1;i>=0;i--){ const rg=rings[i]; rg.r+=rg.vr; rg.vr*=0.9; rg.life--; if(rg.life<=0) rings.splice(i,1); }
     for(let i=floats.length-1;i>=0;i--){ const fl=floats[i]; fl.y+=fl.vy; fl.vy+=0.06; fl.life--; if(fl.life<=0) floats.splice(i,1); }
+    for(let i=hazards.length-1;i>=0;i--){ const h=hazards[i]; const alive=player.state!=='dead';
+      if(h.kind==='wave'){ h.x+=h.vx; h.life--; if(alive&&!h.hit&&Math.abs(player.x-h.x)<14&&Math.abs(player.y-h.y)<depthTol){ h.hit=true; hurtPlayer(h.dmg,Math.sign(h.vx),false); } }
+      else if(h.kind==='nova'){ h.r+=h.vr; h.vr*=0.94; h.life--; if(alive&&!h.hit){ const d=Math.hypot(player.x-h.x,(player.y-16)-h.y); if(Math.abs(d-h.r)<13){ h.hit=true; hurtPlayer(h.dmg,Math.sign(player.x-h.x)||1,false); } } }
+      if(h.life<=0) hazards.splice(i,1); }
 
     // player death → lives / gameover
     if(player.state==='dead'&&player.deadT>50){
@@ -880,6 +913,11 @@
       else { ctx.fillStyle='#6a4a2a'; ctx.fillRect(bx-dir*8,by-1,16,2); ctx.fillStyle='#c9c2b4'; ctx.beginPath(); ctx.moveTo(bx+dir*8,by); ctx.lineTo(bx+dir*3,by-3); ctx.lineTo(bx+dir*3,by+3); ctx.closePath(); ctx.fill(); ctx.fillStyle='#8a9a6a'; ctx.fillRect(bx-dir*8,by-2,3,4); } }
     for(const pt of parts){ const z=pt.sz||2; ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,z,z); } ctx.globalAlpha=1;
     for(const rg of rings){ ctx.globalAlpha=Math.max(0,rg.life/14)*0.85; ctx.strokeStyle=rg.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rg.x,rg.y,rg.r,0,6.283); ctx.stroke(); } ctx.globalAlpha=1;
+    // boss hazards
+    for(const h of hazards){ if(h.kind==='wave'){ const a=Math.max(0,h.life/70); ctx.globalAlpha=a*0.9; ctx.strokeStyle=h.col; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(h.x,h.y-16); ctx.lineTo(h.x,h.y+3); ctx.stroke(); ctx.globalAlpha=a*0.5; ctx.beginPath(); ctx.ellipse(h.x,h.y+2,6,13,0,-1.3,1.3); ctx.stroke(); }
+      else if(h.kind==='nova'){ ctx.globalAlpha=Math.max(0,h.life/40)*0.9; ctx.strokeStyle=h.col; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,6.283); ctx.stroke(); ctx.globalAlpha*=0.5; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,6.283); ctx.stroke(); } } ctx.globalAlpha=1;
+    // signature telegraph — pulsing warning ring at the boss's feet while winding up
+    for(const e of enemies){ if(e.pendingSig&&e.state==='windup'){ const pl=0.5+0.5*Math.sin(performance.now()/70); ctx.globalAlpha=0.35+pl*0.4; ctx.strokeStyle=(e.pendingSig==='nova'||e.pendingSig==='shards')?'#8fdcff':'#ff9a4b'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(e.x,e.y+2,20+pl*6,7+pl*2,0,0,6.283); ctx.stroke(); } } ctx.globalAlpha=1;
     if(floats.length){ ctx.textAlign='center'; for(const fl of floats){ ctx.globalAlpha=Math.min(1,fl.life/12); ctx.font=(fl.big?'bold 11px':'9px')+' "Courier New"'; ctx.fillStyle='#000'; ctx.fillText(fl.n,fl.x+1,fl.y+1); ctx.fillStyle=fl.col; ctx.fillText(fl.n,fl.x,fl.y); } ctx.globalAlpha=1; ctx.textAlign='left'; }
     // foreground swaying grass (frames the stage bottom, adds life)
     { const nw=performance.now(); for(let x=Math.floor(cam/26)*26; x<cam+W+20; x+=26){ const s=((x*2654435761>>>0)%1000)/1000; const gy=FLOOR_BOT+4+s*10; const sway=Math.sin(nw/620+x*0.3)*3.2; ctx.fillStyle=s>0.5?shade(tf.floor,-26):shade(tf.floor,-14);
@@ -1143,7 +1181,7 @@
   function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
   function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
-  const BUILD='2026-07-19c · RPG level-up stats · persistent character';
+  const BUILD='2026-07-19d · boss signature moves · phases · distinct bosses';
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.textAlign='left'; ctx.fillStyle='#4a8fce'; ctx.font='7px "Courier New"'; ctx.fillText('build '+BUILD, 6, 12);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }

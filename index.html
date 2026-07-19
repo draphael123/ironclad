@@ -725,8 +725,9 @@
   }
   function menuUpdate(){
     const up=pressed.up,dn=pressed.down,lf=pressed.left,rt=pressed.right,ok=pressed.confirm||pressed.block||pressed.light,back=pressed.pause;
-    if(scene==='title'){ const n=5; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
-      if(ok){ SFX.select(); if(menu.idx===0)startRun('campaign'); else if(menu.idx===1)startRun('endless'); else if(menu.idx===2)startRun('tutorial'); else if(menu.idx===3)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    if(scene==='title'){ const n=6; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(ok){ SFX.select(); if(menu.idx===0)startRun('campaign'); else if(menu.idx===1)startRun('endless'); else if(menu.idx===2)startRun('tutorial'); else if(menu.idx===3){ scene='bestiary'; menu.idx=0; } else if(menu.idx===4)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    else if(scene==='bestiary'){ const n=BEST.length; if(up||lf)menu.idx=(menu.idx+n-1)%n; if(dn||rt)menu.idx=(menu.idx+1)%n; if(up||dn||lf||rt)SFX.select(); if(back||pressed.confirm){ SFX.select(); scene='title'; menu.idx=3; } }
     else if(scene==='controls'){ if(ok||back){ SFX.select(); scene='title'; } }
     else if(scene==='pause'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
       if(back) scene='play'; else if(ok){ SFX.select(); if(menu.idx===0)scene='play'; else if(menu.idx===1){ settingsFrom='pause'; scene='settings'; menu.idx=0; } else scene='title'; } }
@@ -745,7 +746,7 @@
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
-    logo(80); ['START','ENDLESS','TUTORIAL','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,124+i*18,menu.idx===i));
+    logo(72); ['START','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,112+i*17,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST,W/2,H-24);
     if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); } ctx.textAlign='left'; }
   function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
@@ -760,7 +761,34 @@
       else if(i>=2&&i<=5){ const act=RB[i-2]; ctx.fillStyle='#9a8f6a'; ctx.fillText('['+(rebinding===act?'press key…':keyName(BIND[act]))+']',258,y); }
     });
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('◀▶ adjust   ENTER select   ESC back',W/2,224); ctx.textAlign='left'; }
-  function drawAll(){ if(scene==='title'){ renderTitle(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
+  // ---- bestiary ----
+  const BEST=[
+    {type:'grunt',        role:'Footsoldier',           tip:"Sword-and-shield line trooper. He'll sometimes raise his guard — GRAB to break it, or just out-tempo him with combos."},
+    {type:'spearman',     role:'Skirmisher',            tip:"Long reach; backpedals to keep you at spear-point. Mid-range is death — DASH in past the tip, then punish up close."},
+    {type:'berserker',    role:'Berserker',             tip:"Super-armored two-hand cleave — trading a light won't stop his swing. Don't trade: space it, DODGE the cleave, then counter the long recovery."},
+    {type:'shieldbreaker',role:'Warden',                tip:"Heavy plate shrugs off light hits (chip only) and won't flinch. Use HEAVY blows or a GRAB — never mash light."},
+    {type:'captain',      role:'Boss — The Castellan',  tip:"Guards, super-armor cleaves, and tanky. Bait the cleave, PARRY or dodge it, then unload during the recovery. Shield-throw pokes safely."},
+  ];
+  const bestCache={};
+  function bestFighter(type){ if(bestCache[type]) return bestCache[type]; const a=ARCH[type];
+    const f=makeFighter({type,name:type,face:1,boss:true,x:0,y:0,hp:a.hp,pal:a.pal,size:a.size,spd:a.spd,swing:a.swing,tele:a.tele,canBlock:a.canBlock,armor:a.armor,tough:a.tough,keep:a.keep,weapon:a.weapon,build:a.build}); f.state='idle'; return bestCache[type]=f; }
+  function wrapL(text,x,y,maxw,lh){ const words=text.split(' '); let line='',yy=y; ctx.textAlign='left'; for(const w of words){ const t=line+w+' '; if(ctx.measureText(t).width>maxw&&line){ ctx.fillText(line,x,yy); line=w+' '; yy+=lh; } else line=t; } ctx.fillText(line,x,yy); }
+  function renderBestiary(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#120c16'); g0.addColorStop(1,'#1e1628'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
+    const e=BEST[menu.idx], a=ARCH[e.type], f=bestFighter(e.type);
+    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText('BESTIARY',W/2,26);
+    ctx.fillStyle='#0e0a14'; ctx.fillRect(26,42,150,158); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(26.5,42.5,149,157);
+    ctx.fillStyle='#2a2016'; ctx.fillRect(26,184,150,16);
+    f.x=101; f.y=190; f.size=1.7; f.state='idle'; drawKnight(f);
+    ctx.textAlign='left';
+    ctx.fillStyle='#e6c030'; ctx.font='15px "Courier New"'; ctx.fillText(e.type.toUpperCase(),196,62);
+    ctx.fillStyle='#c9b98a'; ctx.font='9px "Courier New"'; ctx.fillText(e.role,196,76);
+    const tags=[]; if(a.armor)tags.push('ARMORED'); if(a.tough)tags.push('TOUGH'); if(a.canBlock)tags.push('GUARDS'); if(a.keep)tags.push('RANGED'); if(a.boss)tags.push('BOSS');
+    ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HP '+a.hp+(tags.length?'    '+tags.join(' · '):''),196,92);
+    ctx.strokeStyle='#3a3245'; ctx.beginPath(); ctx.moveTo(196,100); ctx.lineTo(W-24,100); ctx.stroke();
+    ctx.fillStyle='#e8dcc0'; ctx.font='10px "Courier New"'; wrapL(e.tip,196,118,W-220,13);
+    ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='9px "Courier New"'; ctx.fillText('◀ '+(menu.idx+1)+' / '+BEST.length+' ▶      ▲▼ browse      ESC / ❚❚ back',W/2,H-14); ctx.textAlign='left'; }
+
+  function drawAll(){ if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
 
   let last=performance.now(),acc=0;
   function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } drawAll(); }

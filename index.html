@@ -750,6 +750,22 @@
     if(t%4===0) mnote(BASS[(musicStep>>2)%BASS.length]/2,0.34,'triangle',0.5);
     mnote(ARP[t%ARP.length]*(t%8<4?1:1.5),0.11,'square',0.12); musicStep++; },220); }
 
+  // ---- orchestral track manager (real files, procedural fallback) ----
+  const TRACKFILE={ title:'title', forest1:'forest1', forest2:'forest3', forest3:'forest3', forest4:'boss', boss:'boss' };
+  const audioTracks={}; let curTrackName=null, usingFile=false;
+  function desiredTrack(){ if(scene!=='play') return 'title'; if(game&&game.mode==='endless') return 'boss'; if(game&&game.mode==='tutorial') return 'forest1'; return (game&&game.song)||'forest1'; }
+  function playTrack(name){
+    if(curTrackName===name) return; curTrackName=name;
+    const file=TRACKFILE[name]||'title';
+    for(const k in audioTracks){ if(k!==file){ try{ audioTracks[k].pause(); }catch(e){} } }
+    let el=audioTracks[file];
+    if(!el){ el=new Audio('audio/'+file+'.mp3'); el.loop=true; el.preload='auto'; el.dataset.ok='1'; el.addEventListener('error',()=>{ el.dataset.ok='0'; }); audioTracks[file]=el; }
+    el.volume=cfg.musicOn?cfg.music:0;
+    const p=el.play(); if(p&&p.then) p.then(()=>{ usingFile=true; if(musicGain) musicGain.gain.value=0; }).catch(()=>{});
+  }
+  function applyMusicVol(){ const v=cfg.musicOn?cfg.music:0; for(const k in audioTracks){ try{ audioTracks[k].volume=v; }catch(e){} } if(musicGain) musicGain.gain.value=usingFile?0:v; }
+  function updateMusic(){ if(!actx) return; const d=desiredTrack(); if(d!==curTrackName) playTrack(d); }
+
   // ---- config persistence ----
   function saveCfg(){ try{ localStorage.setItem('ironclad',JSON.stringify({cfg,BIND,hi:HISCORE,endless:ENDLESS_BEST})); }catch(e){} }
   function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem('ironclad')); if(s){ if(s.cfg) Object.assign(cfg,s.cfg); if(s.BIND) Object.assign(BIND,s.BIND); if(s.hi) HISCORE=s.hi; if(s.endless) ENDLESS_BEST=s.endless; } }catch(e){} }
@@ -794,7 +810,7 @@
       if(back) scene='play'; else if(ok){ SFX.select(); if(menu.idx===0)scene='play'; else if(menu.idx===1){ settingsFrom='pause'; scene='settings'; menu.idx=0; } else scene='title'; } }
     else if(scene==='settings'){ const n=SET.length; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
       if(menu.idx===0&&(lf||rt)){ cfg.sfx=Math.max(0,Math.min(1,+(cfg.sfx+(rt?0.1:-0.1)).toFixed(2))); if(sfxGain)sfxGain.gain.value=cfg.sfx; SFX.select(); saveCfg(); }
-      else if(menu.idx===1&&(lf||rt||ok)){ cfg.musicOn=!cfg.musicOn; if(musicGain)musicGain.gain.value=cfg.musicOn?cfg.music:0; saveCfg(); }
+      else if(menu.idx===1&&(lf||rt||ok)){ cfg.musicOn=!cfg.musicOn; applyMusicVol(); saveCfg(); }
       else if(ok){ if(menu.idx>=2&&menu.idx<=5){ rebinding=RB[menu.idx-2]; SFX.select(); } else if(menu.idx===6){ SFX.select(); scene=settingsFrom; } }
       if(back) scene=settingsFrom;
     }
@@ -809,7 +825,8 @@
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
     logo(72); ['START','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,112+i*17,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST,W/2,H-24);
-    if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); } ctx.textAlign='left'; }
+    if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); }
+    ctx.fillStyle='#5a5344'; ctx.font='6px "Courier New"'; ctx.fillText('music: Thalon · OpenGameArt (CC-BY / CC0)',W/2,H-2); ctx.textAlign='left'; }
   function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
     const rows=[['Move','Arrows / WASD'],['Dodge roll','Shift  (i-frames)'],['Dash','double-tap ◀ or ▶'],['Light attack',keyName(BIND.light)+'  (chains x3)'],['Heavy / Launcher',keyName(BIND.heavy)+'  ·  ↑+'+keyName(BIND.heavy)+' juggles'],['Grab / throw',keyName(BIND.grab)+'  (beats block)'],['Block / Parry',keyName(BIND.block)+'/Space, tap=parry'],['Shield throw','U  (boomerang, cooldown)'],["Knight's Art",'O  (spend full Valor)'],['Pause','Esc / P']];
     rows.forEach((r,i)=>{ const y=74+i*15; ctx.fillStyle='#e8dcc0'; ctx.fillText(r[0],96,y); ctx.fillStyle='#9a8f6a'; ctx.fillText(r[1],210,y); });
@@ -852,7 +869,7 @@
   function drawAll(){ if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
 
   let last=performance.now(),acc=0;
-  function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } drawAll(); }
+  function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } updateMusic(); drawAll(); }
   function frame(now){ tick(now); requestAnimationFrame(frame); }
   requestAnimationFrame(frame); setInterval(()=>tick(performance.now()),1000/30);
 

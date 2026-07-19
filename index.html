@@ -65,6 +65,8 @@
     gpoke:{startup:8,active:4,recover:14,dmg:9,kb:4.0,reach:60,next:null},
     dashatk:{startup:3,active:5,recover:16,dmg:12,kb:8.5,reach:38,next:null},
     launch:{startup:8,active:5,recover:22,dmg:11,kb:3.0,reach:34,next:null,launch:true},
+    gsmash:{startup:20,active:6,recover:26,dmg:24,kb:12,reach:46,next:null,unblock:true},
+    gdagger:{startup:3,active:3,recover:8,dmg:6,kb:3.0,reach:30,next:null},
   };
   const PARRY_FRAMES=8;
 
@@ -84,6 +86,21 @@
     captain:{hp:200,spd:1.35,size:1.22,swing:'gcleave',tele:22,canBlock:0.5,armor:true,tough:false,keep:0,weapon:'cleave',boss:true,
       build:{helm:'wing',cape:'#6a2f7a',shield:'ornate',pauld:'ornate',bulk:1.14,gold:true},
       pal:{armor:'#5a3f7a',trim:'#caa6f0',dark:'#241634',skin:'#d0a070',plume:'#e6c030',weap:'#efe6ff'}},
+    archer:{hp:48,spd:1.2,size:0.95,swing:'gswing',tele:22,canBlock:0,armor:false,tough:false,keep:118,weapon:'bow',ranged:'arrow',
+      build:{helm:'hood',shield:null,pauld:'strap',bulk:0.82,cape:'#3a5a2a'},
+      pal:{armor:'#4a5a34',trim:'#7a9050',dark:'#25301a',skin:'#c99a6a',plume:'#6a8040',weap:'#8a6a3a'}},
+    rogue:{hp:52,spd:1.7,size:0.9,swing:'gdagger',tele:12,canBlock:0,armor:false,tough:false,keep:0,weapon:'daggers',evade:true,
+      build:{helm:'hood',shield:null,pauld:'strap',bulk:0.8,cape:'#2a2030'},
+      pal:{armor:'#3a3348',trim:'#6a5a80',dark:'#1c1826',skin:'#c99a6a',plume:'#8a4a6a',weap:'#d8d2c4'}},
+    maul:{hp:150,spd:0.85,size:1.24,swing:'gsmash',tele:32,canBlock:0.2,armor:true,tough:true,keep:0,weapon:'maul',
+      build:{helm:'great',shield:null,pauld:'heavy',bulk:1.34},
+      pal:{armor:'#5a4a3a',trim:'#8a7050',dark:'#2a2018',skin:'#c08a5a',plume:'#8a3a2a',weap:'#a89880'}},
+    lancer:{hp:90,spd:1.25,size:1.05,swing:'gpoke',tele:26,canBlock:0.3,armor:false,tough:false,keep:0,weapon:'spear',charge:true,
+      build:{helm:'wing',shield:'kite',pauld:'plate',bulk:1.02,cape:'#4a2a2a'},
+      pal:{armor:'#7a4a4a',trim:'#c08a8a',dark:'#331818',skin:'#c99a6a',plume:'#e0d0d0',weap:'#e6ecf5'}},
+    warlock:{hp:60,spd:1.0,size:1.0,swing:'gswing',tele:30,canBlock:0,armor:false,tough:false,keep:100,weapon:'staff',ranged:'magic',
+      build:{helm:'wizard',shield:null,pauld:'strap',bulk:0.9,cape:'#2a1a3a'},
+      pal:{armor:'#3a2a5a',trim:'#8a6ac0',dark:'#1a1028',skin:'#c99a6a',plume:'#b070ef',weap:'#6a4a2a'}},
   };
 
   // ---- Stage script: gates trigger screen-lock encounters ----
@@ -98,14 +115,14 @@
         encounters:[ [['grunt','grunt']], [['grunt','spearman']] ],
         mini:{type:'shieldbreaker', name:'OAKFIST', sub:'Bulwark of the Path', hp:240, traits:{armor:true}} },
       { name:'MISTY GROVE', song:'forest2', theme:'mist',
-        encounters:[ [['spearman','grunt']], [['grunt','grunt','grunt']] ],
-        mini:{type:'spearman', name:'NETTLE', sub:'Thornspear Duelist', hp:175, traits:{savage:true}} },
+        encounters:[ [['grunt','archer']], [['spearman','archer','grunt']] ],
+        mini:{type:'archer', name:'DEADEYE', sub:'The Long Shot', hp:150, traits:{}} },
       { name:'THORNWOOD', song:'forest3', theme:'thorn',
-        encounters:[ [['berserker','grunt']], [['shieldbreaker','spearman']] ],
+        encounters:[ [['rogue','grunt']], [['berserker','rogue','spearman']] ],
         mini:{type:'berserker', name:'BRAMBLEHIDE', sub:'The Maddened', hp:270, traits:{savage:true}} },
       { name:'ANCIENT ROOTS', song:'forest4', theme:'roots',
-        encounters:[ [['shieldbreaker','berserker']], [['spearman','spearman','grunt']] ],
-        mini:{type:'shieldbreaker', name:'IRONBARK', sub:'Root-Warden', hp:320, traits:{giant:true}} },
+        encounters:[ [['maul','grunt']], [['shieldbreaker','maul','archer']] ],
+        mini:{type:'maul', name:'IRONBARK', sub:'Root-Warden', hp:340, traits:{}} },
     ],
     boss:{type:'captain', name:'THE FOREST WARDEN', sub:'Guardian of the Wood', hp:440,
       pal:{armor:'#3f6b3a',trim:'#9ad09a',dark:'#182e18',skin:'#c8a874',plume:'#e6c030',weap:'#e2eede'}},
@@ -115,16 +132,16 @@
     name:'FROSTVALE',
     levels:[
       { name:'SNOWFIELD PATH', song:'forest1', theme:'snow',
-        encounters:[ [['grunt','grunt']], [['grunt','spearman']] ],
+        encounters:[ [['grunt','archer']], [['spearman','grunt']] ],
         mini:{type:'shieldbreaker', name:'FROSTBITE', sub:'Warden of the Drift', hp:290, traits:{armor:true}, pal:ICE} },
       { name:'GLACIER GROVE', song:'forest3', theme:'glacier',
-        encounters:[ [['spearman','grunt']], [['grunt','grunt','grunt']] ],
-        mini:{type:'spearman', name:'RIME', sub:'Icespear Duelist', hp:210, traits:{savage:true}, pal:ICE} },
+        encounters:[ [['lancer','grunt']], [['archer','lancer','spearman']] ],
+        mini:{type:'lancer', name:'GALEFORCE', sub:'The Charging Gale', hp:240, traits:{}, pal:ICE} },
       { name:'BLIZZARD RIDGE', song:'forest3', theme:'blizzard',
-        encounters:[ [['berserker','grunt']], [['shieldbreaker','spearman']] ],
-        mini:{type:'berserker', name:'AVALANCHE', sub:'The Unbroken', hp:320, traits:{savage:true}, pal:ICE2} },
+        encounters:[ [['warlock','grunt']], [['berserker','warlock','archer']] ],
+        mini:{type:'warlock', name:'HEXFROST', sub:'Frost Conjurer', hp:200, traits:{}, pal:ICE2} },
       { name:'CRYSTAL CAVERNS', song:'boss', theme:'crystal',
-        encounters:[ [['shieldbreaker','berserker']], [['spearman','spearman','grunt']] ],
+        encounters:[ [['maul','warlock']], [['lancer','rogue','archer']] ],
         mini:{type:'shieldbreaker', name:'GLACIUS', sub:'Crystalborn', hp:380, traits:{giant:true}, pal:ICE} },
     ],
     boss:{type:'captain', name:'THE HOARFROST KING', sub:'Sovereign of the Frozen Waste', hp:520, pal:BOSSICE},
@@ -143,7 +160,7 @@
     game.levelIdx=li; game.level=lv; game.gateIdx=0; game.waveIdx=0; game.levelLen=lv.len; game.levelName=lv.name; game.theme=lv.theme; game.song=lv.song;
     game.lock=false; game.progressWall=0; game.camX=0;
     player.x=60; player.vx=0; player.vy=0; player.state='idle';
-    enemies.length=0; shots.length=0; pickups.length=0; props.length=0;
+    enemies.length=0; shots.length=0; pickups.length=0; props.length=0; ebolts.length=0;
     for(let bx=280,k=0; bx<lv.len-200; bx+=Math.round(300+((k*97)%150)),k++){ props.push({x:bx,y:FLOOR_TOP+18+((k%3)*24),broken:0,t:0}); }
     banner(w.name+'  ·  '+lv.name, '#a9e5a9'); msgT=120;
   }
@@ -180,7 +197,7 @@
   function makeFighter(o){
     return { x:o.x,y:o.y,face:o.face,isPlayer:!!o.isPlayer,type:o.type||'player',boss:!!o.boss,
       hp:o.hp,maxhp:o.hp,name:o.name,pal:o.pal,size:o.size||1,
-      spd:o.spd||1.7,swing:o.swing,tele:o.tele||24,canBlock:o.canBlock||0,armor:!!o.armor,tough:!!o.tough,keep:o.keep||0,weapon:o.weapon||'sword',build:o.build||null,
+      spd:o.spd||1.7,swing:o.swing,tele:o.tele||24,canBlock:o.canBlock||0,armor:!!o.armor,tough:!!o.tough,keep:o.keep||0,weapon:o.weapon||'sword',build:o.build||null,ranged:o.ranged||null,charge:!!o.charge,evade:!!o.evade,chargeT:0,chargeHit:false,
       vx:0,vy:0,state:'idle',att:null,attT:0,attHit:false,combo:null,comboBuf:0,
       hitStun:0,stunT:0,downT:0,invul:0,flash:0,deadT:0,parryWindow:0,blockT:0,think:0,telegraph:0,
       reachBonus:0,parryHeal:0,grabHeal:0,dmgMult:1,heavyMult:1,
@@ -190,13 +207,13 @@
   }
 
   let player, enemies, hitstop, shake, msg, msgT, msgCol, game;
-  const shots=[], props=[], pickups=[];
+  const shots=[], props=[], pickups=[], ebolts=[];
 
   function spawnEnemy(type,x,y){
     const a=ARCH[type]; if(!a) return;
     const e=makeFighter({type,name:type.toUpperCase(),face:-1,boss:a.boss,
       x:x!=null?x:game.camX+W+20, y:y!=null?y:FLOOR_TOP+20+Math.random()*(FLOOR_BOT-FLOOR_TOP-30),
-      hp:a.hp,pal:a.pal,size:a.size,spd:a.spd,swing:a.swing,tele:a.tele,canBlock:a.canBlock,armor:a.armor,tough:a.tough,keep:a.keep,weapon:a.weapon,build:a.build});
+      hp:a.hp,pal:a.pal,size:a.size,spd:a.spd,swing:a.swing,tele:a.tele,canBlock:a.canBlock,armor:a.armor,tough:a.tough,keep:a.keep,weapon:a.weapon,build:a.build,ranged:a.ranged,charge:a.charge,evade:a.evade});
     const wsc=1+(game.worldIdx||0)*0.3; if(wsc!==1){ e.hp=e.maxhp=Math.round(e.maxhp*wsc); }   // later worlds: tougher rank-and-file
     enemies.push(e); return e;
   }
@@ -208,7 +225,7 @@
       pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
     enemies=[];
     game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, worldIdx:0, nextWorld:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
-    shots.length=0; pickups.length=0; props.length=0;
+    shots.length=0; pickups.length=0; props.length=0; ebolts.length=0;
     hitstop=0; shake=0; msg=''; msgT=0; msgCol='#e8dcc0';
     if(mode==='endless'){ player.x=W/2; game.lock=true; game.levelLen=W; startEndlessWave(); }
     else if(mode==='tutorial'){ player.maxhp=500; player.hp=500; player.x=Math.round(W*0.34); game.tutStartX=player.x; game.tutStep=0; game.lock=true; game.camX=0; game.levelLen=W;
@@ -252,7 +269,7 @@
       return;
     }
     const facingAtt=Math.sign(att.x-tgt.x)===tgt.face||att.x===tgt.x;
-    if(tgt.state==='block'&&facingAtt){
+    if(tgt.state==='block'&&facingAtt&&!dat.unblock){
       if(tgt.isPlayer&&tgt.parryWindow>0){
         att.state='stagger'; att.stunT=34; att.att=null; att.telegraph=0; att.vx=Math.sign(att.x-tgt.x||-tgt.face)*2; tgt.parryWindow=0; tgt.flash=3;
         if(tgt.parryHeal) tgt.hp=Math.min(tgt.maxhp,tgt.hp+tgt.parryHeal); gainValor(tgt,34);
@@ -325,6 +342,18 @@
         if(Math.abs(dx)<16){ s.owner.hasShield=true; s.owner.shieldCd=40; shots.splice(i,1); } }
     }
   }
+  // ---- enemy ranged + charge → the player ----
+  function hurtPlayer(dmg,dir,unblock){ const p=player;
+    if(p.state==='dead'||p.invul>0||p.state==='roll'||p.state==='dash') return;   // i-frames / rolling dodges everything
+    if(!unblock && p.state==='block' && p.face===-Math.sign(dir)){ p.flash=4; if(p.parryWindow>0){ /* no parry vs ranged/charge */ } fx(3,frontX(p),p.y-16,'#cfe0ff',5); shake=Math.max(shake,2); SFX.block(); return; }
+    dmg=Math.round(dmg*(1+(game.worldIdx||0)*0.2)*(p.dmgMult||1)); p.hp-=dmg; p.vx=Math.sign(dir||1)*4; p.state='hit'; p.hitStun=12; p.invul=8; p.flash=6;
+    fx(7,p.x,p.y-16,'#ff9a4b',9); shake=Math.max(shake,5); SFX.hit(dmg>12);
+    if(p.hp<=0){ p.hp=0; p.state='dead'; p.deadT=0; } }
+  function fireBolt(f,kind){ ebolts.push({x:f.x+f.face*14,y:f.y-16,vx:f.face*(kind==='magic'?3.4:5.2),owner:f,kind,dmg:kind==='magic'?15:9,life:130,t:0}); SFX.swing(); }
+  function updateBolts(){ for(let i=ebolts.length-1;i>=0;i--){ const b=ebolts[i]; b.x+=b.vx; b.t++; b.life--;
+    if(player.state!=='dead'&&Math.abs(b.x-player.x)<12&&Math.abs(b.y-(player.y-16))<depthTol){ hurtPlayer(b.dmg,Math.sign(b.vx),false); fx(4,b.x,b.y,b.kind==='magic'?'#b070ef':'#ffd66b',6); ebolts.splice(i,1); continue; }
+    if(b.life<=0||b.x<game.camX-40||b.x>game.camX+W+40) ebolts.splice(i,1); } }
+  function chargeHitPlayer(f){ hurtPlayer(16,f.face,false); f.vx*=0.4; }
 
   function bounds(f){
     // dynamic world clamp based on lock + camera
@@ -341,6 +370,9 @@
     if(f.state==='down'){ f.downT++; f.stunT--; f.x+=f.vx; f.vx*=0.85; if(f.stunT<=0){ f.state='idle'; f.invul=10; } clampPos(f); return; }
     if(f.state==='stagger'){ f.stunT--; f.x+=f.vx; f.vx*=0.7; if(f.stunT<=0) f.state='idle'; clampPos(f); return; }
     if(f.state==='hit'){ f.hitStun--; f.x+=f.vx; f.vx*=0.82; if(f.hitStun<=0) f.state='idle'; clampPos(f); return; }
+    if(f.state==='charge'){ f.chargeT++; f.x+=f.vx; f.vx*=0.985;
+      if(!f.chargeHit&&Math.abs(f.x-player.x)<16&&Math.abs(f.y-player.y)<depthTol&&player.state!=='dead'){ chargeHitPlayer(f); f.chargeHit=true; }
+      if(f.chargeT>28){ f.state='idle'; f.think=46; } clampPos(f); return; }
     if(f.state==='dash'){ f.dashT++; f.x+=f.vx; f.vx*=0.9; f.invul=Math.max(f.invul,2);
       if(f.isPlayer&&(pressed.light||pressed.heavy)){ startAttack(f,'dashatk'); return; }
       if(f.dashT>13) f.state='idle'; clampPos(f); return; }
@@ -381,13 +413,16 @@
     if(f.enrageAble&&!f.enraged&&f.hp<f.maxhp*0.4){ f.enraged=true; f.spd*=1.45; f.tele=Math.max(10,f.tele-6); f.eliteAura='#ff2010'; banner('SAVAGE ENRAGED!','#ff6a4a'); }
     const dx=p.x-f.x, dy=p.y-f.y, adx=Math.abs(dx), ady=Math.abs(dy); f.face=dx>=0?1:-1;
     if(f.blockT>0){ f.blockT--; f.state='block'; f.vx*=0.5; f.x+=f.vx; clampPos(f); return; }
-    if(f.telegraph>0){ f.telegraph--; f.vx*=0.6; f.x+=f.vx; f.state='windup'; if(f.telegraph===0) startAttack(f,f.swing); clampPos(f); return; }
+    if(f.telegraph>0){ f.telegraph--; f.vx*=0.6; f.x+=f.vx; f.state='windup';
+      if(f.telegraph===0){ if(f.ranged){ fireBolt(f,f.ranged); f.state='idle'; f.think=f.ranged==='magic'?100:64; } else if(f.charge){ f.state='charge'; f.chargeT=0; f.chargeHit=false; f.vx=f.face*5.2; } else startAttack(f,f.swing); }
+      clampPos(f); return; }
     f.think--;
+    if(f.evade&&p.state==='attack'&&adx<44&&ady<depthTol+6&&f.think<=0&&Math.random()<0.55){ f.state='roll'; f.rollT=0; f.vx=-f.face*4.4; f.invul=14; f.think=34; clampPos(f); return; }
     if(f.canBlock&&p.state==='attack'&&adx<48&&ady<depthTol+6&&f.think<=0&&Math.random()<f.canBlock){ f.blockT=20; f.think=48; f.vx=0; clampPos(f); return; }
     if(f.keep>0){
       if(adx<f.keep-10&&f.think<=0){ const away=-Math.sign(dx)||1; f.vx=away*f.spd; f.x+=f.vx; f.vy=(ady>10?Math.sign(dy):0)*f.spd*0.7; f.y+=f.vy; f.state='walk'; clampPos(f); return; }
       if(adx<f.keep+8&&ady<depthTol&&f.think<=0){ f.telegraph=f.tele; f.think=70; f.vx=0; clampPos(f); return; }
-    } else if(adx<40&&ady<depthTol&&f.think<=0){ f.telegraph=f.tele; f.think=60; f.vx=0; clampPos(f); return; }
+    } else if(adx<(f.charge?104:40)&&ady<depthTol&&f.think<=0){ f.telegraph=f.tele; f.think=60; f.vx=0; clampPos(f); return; }
     const reach=f.keep>0?f.keep:28;
     const mvx=adx>reach?Math.sign(dx):0, mvy=ady>10?Math.sign(dy):0;
     f.vx=mvx*f.spd; f.vy=mvy*f.spd*0.7; f.x+=f.vx; f.y+=f.vy; f.state=(mvx||mvy)?'walk':'idle'; if(f.think<0) f.think=0; clampPos(f);
@@ -467,7 +502,7 @@
     updateFighter(player,dt);
     for(const e of enemies) updateFighter(e,dt);
     for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].state==='dead'&&enemies[i].deadT>70) enemies.splice(i,1); }
-    updateShots();
+    updateShots(); updateBolts();
     for(let i=pickups.length-1;i>=0;i--){ const pk=pickups[i]; pk.t++; if(pk.vy!==0){ pk.y+=pk.vy; pk.vy+=0.22; if(pk.vy>0&&pk.t>12) pk.vy=0; }
       if(player.state!=='dead'&&Math.abs(pk.x-player.x)<16&&Math.abs(pk.y-player.y)<depthTol){ player.hp=Math.min(player.maxhp,player.hp+18); spark(pk.x,pk.y-6,'#6ee06e',12); SFX.block(); banner('+18 HP','#a9e5a9'); pickups.splice(i,1); } }
     for(let i=parts.length-1;i>=0;i--){ const pt=parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.25; pt.life--; if(pt.life<=0) parts.splice(i,1); }
@@ -511,6 +546,13 @@
     if(h==='wing'){ ctx.fillStyle=A; ctx.fillRect(-6,-46,12,12); ctx.fillStyle=HL; ctx.fillRect(-6,-46,3,12); ctx.fillStyle=D; ctx.fillRect(-6,-40,12,2); ctx.fillStyle='#14141c'; ctx.fillRect(-4,-40,8,2); ctx.fillStyle=T; ctx.fillRect(-6,-46,12,1);
       ctx.fillStyle='#e6c030'; ctx.beginPath(); ctx.moveTo(-6,-46); ctx.lineTo(-13,-51); ctx.lineTo(-11,-44); ctx.lineTo(-6,-42); ctx.fill(); ctx.beginPath(); ctx.moveTo(6,-46); ctx.lineTo(13,-51); ctx.lineTo(11,-44); ctx.lineTo(6,-42); ctx.fill();
       ctx.fillStyle=hit?'#fff':p.plume; ctx.fillRect(-1,-59,3,13); ctx.fillStyle=hit?'#fff':shade(p.plume,28); ctx.fillRect(-1,-59,1,13); return; }
+    if(h==='hood'){ ctx.fillStyle=D; ctx.beginPath(); ctx.moveTo(-7,-34); ctx.lineTo(-7,-46); ctx.lineTo(0,-54); ctx.lineTo(7,-46); ctx.lineTo(7,-34); ctx.lineTo(4,-40); ctx.lineTo(-4,-40); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=shade(D,16); ctx.beginPath(); ctx.moveTo(-7,-46); ctx.lineTo(0,-54); ctx.lineTo(-2,-46); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#1a1620'; ctx.fillRect(-4,-42,8,4); ctx.fillStyle='#c04040'; ctx.fillRect(-3,-41,2,1); ctx.fillRect(1,-41,2,1); return; }   // hood + glowing eyes
+    if(h==='wizard'){ ctx.fillStyle=p.skin; ctx.fillRect(-4,-43,8,9);
+      ctx.fillStyle=A; ctx.beginPath(); ctx.moveTo(-7,-42); ctx.lineTo(1,-62); ctx.lineTo(8,-42); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=T; ctx.beginPath(); ctx.moveTo(-1,-56); ctx.lineTo(1,-62); ctx.lineTo(2,-56); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=shade(A,-20); ctx.fillRect(-7,-42,15,3); ctx.fillStyle=D; ctx.fillRect(-4,-40,8,2); return; }   // pointed wizard hat
     // 'crest' — hero
     ctx.fillStyle=A; ctx.fillRect(-6,-46,12,6); ctx.fillRect(-6,-40,12,3); ctx.fillStyle=HL; ctx.fillRect(-6,-46,12,2);
     ctx.fillStyle=D; ctx.fillRect(-6,-39,12,2); ctx.fillStyle='#14141c'; ctx.fillRect(-4,-39,8,2);
@@ -578,7 +620,7 @@
     if(f.state==='attack'&&!throwing){
       const dat=ATT[f.att]; const swing=Math.min(1,Math.max(0,(f.attT-dat.startup*0.4)/(dat.startup+dat.active))); const ang=-2.2+swing*3.4;
       ctx.save(); ctx.translate(8,-30); ctx.rotate(ang);
-      const wlen=(dat.reach+(f.isPlayer?f.reachBonus:0))*0.9, ww=f.weapon==='cleave'?7:(f.weapon==='spear'?3:4);
+      const wlen=(dat.reach+(f.isPlayer?f.reachBonus:0))*0.9, ww=f.weapon==='maul'?8:(f.weapon==='cleave'?7:(f.weapon==='spear'||f.weapon==='staff'?3:4));
       ctx.fillStyle=p.weap; ctx.fillRect(0,-ww/2,wlen,ww);
       if(f.weapon==='spear'){ ctx.fillStyle=T; ctx.beginPath(); ctx.moveTo(wlen,-4); ctx.lineTo(wlen+7,0); ctx.lineTo(wlen,4); ctx.fill(); }
       ctx.fillStyle=T; ctx.fillRect(-3,-4,5,8);
@@ -587,7 +629,7 @@
     } else if(f.state==='windup'){
       const dat=ATT[f.swing]||ATT.gswing, ang=-1.3-wp*1.0;
       ctx.save(); ctx.translate(8,-30); ctx.rotate(ang);
-      const wlen=dat.reach*0.9, ww=f.weapon==='cleave'?7:(f.weapon==='spear'?3:4);
+      const wlen=dat.reach*0.9, ww=f.weapon==='maul'?8:(f.weapon==='cleave'?7:(f.weapon==='spear'||f.weapon==='staff'?3:4));
       ctx.fillStyle=p.weap; ctx.fillRect(0,-ww/2,wlen,ww);
       if(f.weapon==='spear'){ ctx.fillStyle=T; ctx.beginPath(); ctx.moveTo(wlen,-4); ctx.lineTo(wlen+7,0); ctx.lineTo(wlen,4); ctx.fill(); }
       ctx.fillStyle=T; ctx.fillRect(-3,-4,5,8);
@@ -597,6 +639,10 @@
     else {
       if(f.weapon==='spear'){ ctx.fillStyle=D; ctx.fillRect(10,-52,3,40); ctx.fillStyle=T; ctx.beginPath(); ctx.moveTo(9.5,-52); ctx.lineTo(11.5,-61); ctx.lineTo(14,-52); ctx.closePath(); ctx.fill(); ctx.fillStyle=shade(T,26); ctx.fillRect(11,-59,1,7); }
       else if(f.weapon==='cleave'){ ctx.fillStyle=D; ctx.fillRect(10,-42,3,28); ctx.fillStyle=p.weap; ctx.fillRect(7,-50,10,11); ctx.fillStyle=shade(p.weap,28); ctx.fillRect(7,-50,10,2); ctx.fillStyle=shade(p.weap,-32); ctx.fillRect(7,-41,10,2); }
+      else if(f.weapon==='maul'){ ctx.fillStyle=D; ctx.fillRect(10,-40,3,26); ctx.fillStyle=p.weap; ctx.fillRect(5,-51,13,13); ctx.fillStyle=shade(p.weap,26); ctx.fillRect(5,-51,13,3); ctx.fillStyle=shade(p.weap,-34); ctx.fillRect(5,-41,13,3); ctx.fillStyle=D; ctx.fillRect(10,-51,3,13); }
+      else if(f.weapon==='bow'){ ctx.strokeStyle=p.weap; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(10,-30,14,-1.15,1.15); ctx.stroke(); ctx.strokeStyle=shade(T,20); ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(4.5,-42.5); ctx.lineTo(4.5,-17.5); ctx.stroke(); }
+      else if(f.weapon==='staff'){ ctx.fillStyle=D; ctx.fillRect(10,-54,3,40); const og=ctx.createRadialGradient(11.5,-57,1,11.5,-57,9); og.addColorStop(0,'rgba(180,120,255,.85)'); og.addColorStop(1,'rgba(180,120,255,0)'); ctx.fillStyle=og; ctx.fillRect(2,-66,19,18); ctx.fillStyle='#c8a0ff'; ctx.beginPath(); ctx.arc(11.5,-57,4,0,6.283); ctx.fill(); }
+      else if(f.weapon==='daggers'){ ctx.fillStyle=p.weap; ctx.fillRect(9,-30,11,2); ctx.fillRect(9,-24,11,2); ctx.fillStyle=T; ctx.fillRect(6,-31,3,9); }
       else { ctx.fillStyle=p.weap; ctx.fillRect(9,-44,3,30); ctx.fillStyle=shade(p.weap,28); ctx.fillRect(9,-44,1,30); ctx.fillStyle=b.gold?'#e6c030':T; ctx.fillRect(6,-16,8,2); ctx.fillStyle=b.gold?'#e6c030':shade(T,-20); ctx.fillRect(9.5,-14,2,3); }
     }
     if(f.state==='block'){ const par=f.parryWindow>0; drawShield(b.shield||'kite',9,-26,par?'#e8f2ff':A,par?'#ffffff':T); }
@@ -718,6 +764,9 @@
     for(const s of shots){ ctx.save(); ctx.translate(Math.round(s.x),Math.round(s.y-20)); ctx.rotate(s.spin);
       ctx.fillStyle='#5b7fb0'; ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(6,-3); ctx.lineTo(4,7); ctx.lineTo(-4,7); ctx.lineTo(-6,-3); ctx.closePath(); ctx.fill();
       ctx.fillStyle='#a9c6ef'; ctx.fillRect(-1,-6,2,12); ctx.fillRect(-5,-1,10,2); ctx.restore(); }
+    for(const b of ebolts){ const bx=Math.round(b.x), by=Math.round(b.y), dir=Math.sign(b.vx)||1;
+      if(b.kind==='magic'){ const og=ctx.createRadialGradient(bx,by,1,bx,by,9); og.addColorStop(0,'rgba(200,140,255,.95)'); og.addColorStop(1,'rgba(160,90,240,0)'); ctx.fillStyle=og; ctx.beginPath(); ctx.arc(bx,by,9,0,6.283); ctx.fill(); ctx.fillStyle='#e0c0ff'; ctx.beginPath(); ctx.arc(bx,by,3,0,6.283); ctx.fill(); }
+      else { ctx.fillStyle='#6a4a2a'; ctx.fillRect(bx-dir*8,by-1,16,2); ctx.fillStyle='#c9c2b4'; ctx.beginPath(); ctx.moveTo(bx+dir*8,by); ctx.lineTo(bx+dir*3,by-3); ctx.lineTo(bx+dir*3,by+3); ctx.closePath(); ctx.fill(); ctx.fillStyle='#8a9a6a'; ctx.fillRect(bx-dir*8,by-2,3,4); } }
     for(const pt of parts){ ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,2,2); } ctx.globalAlpha=1;
     // foreground swaying grass (frames the stage bottom, adds life)
     { const nw=performance.now(); for(let x=Math.floor(cam/26)*26; x<cam+W+20; x+=26){ const s=((x*2654435761>>>0)%1000)/1000; const gy=FLOOR_BOT+4+s*10; const sway=Math.sin(nw/620+x*0.3)*3.2; ctx.fillStyle=s>0.5?shade(tf.floor,-26):shade(tf.floor,-14);
@@ -922,6 +971,11 @@
     {type:'berserker',    role:'Berserker',             tip:"Super-armored two-hand cleave — trading a light won't stop his swing. Don't trade: space it, DODGE the cleave, then counter the long recovery."},
     {type:'shieldbreaker',role:'Warden',                tip:"Heavy plate shrugs off light hits (chip only) and won't flinch. Use HEAVY blows or a GRAB — never mash light."},
     {type:'captain',      role:'Captain',               tip:"Guards, super-armor cleaves, and tanky. Bait the cleave, PARRY or dodge it, then unload during the recovery. Shield-throw pokes safely."},
+    {type:'archer',       role:'Ranged',                tip:"Kites you and fires arrows from afar. Standing still gets you peppered — DASH in, block the bolts head-on, and cut him down fast (he's fragile up close)."},
+    {type:'rogue',        role:'Assassin',              tip:"Fast dual blades, and ROLLS away the moment you swing. Don't over-commit — bait his evade, then punish the recovery. A pure speed check."},
+    {type:'maul',         role:'Breaker',               tip:"Slow, armored, huge overhead SMASH that is UNBLOCKABLE — block won't save you, only a DODGE will. Roll through it and hammer the long recovery."},
+    {type:'lancer',       role:'Charger',               tip:"Rears back, then CHARGES straight across the arena. Sidestep on the depth axis or dodge — after the charge he overshoots and is wide open."},
+    {type:'warlock',      role:'Caster',                tip:"Hangs back and hurls homing magic bolts. Camping one spot is death — keep moving, weave the orbs, and rush him down before he stacks casts."},
     {type:'captain', disp:'THE FOREST WARDEN',  role:'World 1 Boss', pal:FOREST.boss.pal, tip:"Guardian of the Wood. A towering captain — patient blocks and heavy cleaves. Whittle him with parries and grabs; save your Knight's Art for the opening."},
     {type:'captain', disp:'THE HOARFROST KING', role:'World 2 Boss', pal:BOSSICE, tip:"Sovereign of the Frozen Waste. Everything the Warden does, colder and tougher. Keep moving, punish the recovery, and don't get cornered on the ice."},
   ];
@@ -1004,7 +1058,8 @@
   window.__ironclad={
     get p(){return player;}, get e(){return enemies[0];}, get enemies(){return enemies;}, get game(){return game;},
     get scene(){return scene;}, set scene(s){scene=s;}, get menu(){return menu;}, get cfg(){return cfg;}, get bind(){return BIND;},
-    get props(){return props;}, get pickups(){return pickups;},
+    get props(){return props;}, get pickups(){return pickups;}, get ebolts(){return ebolts;},
+    fire:(f,k)=>fireBolt(f||enemies[0]||player,k||'arrow'),
     key:(code)=>{ dispatchEvent(new KeyboardEvent('keydown',{code})); dispatchEvent(new KeyboardEvent('keyup',{code})); },
     pump:(n=1)=>{ for(let i=0;i<n;i++) update(F); },
     keys, press:(k)=>{pressed[k]=true; keys[k]=true;}, release:(k)=>{keys[k]=false;},

@@ -277,7 +277,7 @@
         att.state='stagger'; att.stunT=34; att.att=null; att.telegraph=0; att.vx=Math.sign(att.x-tgt.x||-tgt.face)*2; tgt.parryWindow=0; tgt.flash=3;
         if(tgt.parryHeal) tgt.hp=Math.min(tgt.maxhp,tgt.hp+tgt.parryHeal); gainValor(tgt,34);
         if(tgt.stormparry){ att.hp-=tgt.stormparry; if(att.hp<=0){ att.hp=0; att.state='dead'; att.deadT=0; SFX.death(); game.score+=att.elite?250:100; game.bigFlash=8; } }
-        fx(11,frontX(tgt),tgt.y-16,'#ffffff',18); shake=Math.max(shake,6); SFX.parry(); banner('PARRY!','#dff0ff'); return;
+        fx(11,frontX(tgt),tgt.y-16,'#ffffff',18); ring(frontX(tgt),tgt.y-16,'#dff0ff'); ring(frontX(tgt),tgt.y-16,'#ffffff'); shake=Math.max(shake,6); SFX.parry(); banner('PARRY!','#dff0ff'); return;
       }
       tgt.vx+=Math.sign(tgt.x-att.x||att.face)*(dat.kb*0.35); tgt.flash=4; fx(3,frontX(att),att.y-16,'#cfe0ff',6); shake=Math.max(shake,2); SFX.block(); return;
     }
@@ -304,7 +304,7 @@
     if(interrupt){ tgt.vx=dir*dat.kb; tgt.state='hit'; tgt.hitStun=dmg>12?16:10; tgt.invul=6; tgt.att=null; tgt.telegraph=0; tgt.blockT=0; }
     else { tgt.vx+=dir*dat.kb*0.25; if(tgt.tough&&light) fx(2,frontX(att),att.y-16,'#c9d2e0',4); }
     if(att.isPlayer&&att.reaper&&tgt.hp>0&&!tgt.boss&&tgt.hp<=tgt.maxhp*0.15){ tgt.hp=0; spark(tgt.x,tgt.y-16,'#c02020',12); }
-    const bigHit=dmg>12; fx(bigHit?13:7,frontX(att),att.y-16, bigHit?'#ffffff':(tgt.state==='stagger'?'#ff9a4b':'#ffd66b'), bigHit?16:9); if(bigHit){ spark(frontX(att),att.y-16,'#ffd66b',10); game.bigFlash=Math.max(game.bigFlash,4); } shake=Math.max(shake,bigHit?8.5:4.2); SFX.hit(bigHit,att.weapon); if(att.isPlayer){ gainValor(att,4); addCombo(); }
+    const bigHit=dmg>12; fx(bigHit?13:7,frontX(att),att.y-16, bigHit?'#ffffff':(tgt.state==='stagger'?'#ff9a4b':'#ffd66b'), bigHit?16:9); if(bigHit){ spark(frontX(att),att.y-16,'#ffd66b',10); ring(frontX(att),att.y-16,'#ffe6b0'); ring(frontX(att),att.y-16,'#ffffff'); burst(frontX(att),att.y-16,'#ffd66b',true,att.face); game.bigFlash=Math.max(game.bigFlash,4); } shake=Math.max(shake,bigHit?8.5:4.2); SFX.hit(bigHit,att.weapon); if(att.isPlayer){ gainValor(att,4); addCombo(); }
     if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; fx(12,tgt.x,tgt.y-16,'#ffd66b',16); shake=8; SFX.death(); if(att.isPlayer){ game.score+=tgt.boss?500:(tgt.elite?250:100); game.bigFlash=8; } if(tgt.boss){ hitstop=Math.max(hitstop,26); game.punch=1; shake=12; } }
   }
   function tryHit(att,dat){ const r=reachOf(att,dat); for(const t of targetsOf(att,r)) resolveHit(att,t,dat); if(att.isPlayer) breakProps(att,r); }
@@ -321,8 +321,16 @@
     if(t.hp<=0){ t.hp=0; t.state='dead'; t.deadT=0; SFX.death(); if(att.isPlayer){ game.score+=t.boss?500:100; game.bigFlash=8; } }
   }
 
-  const parts=[];
-  function spark(x,y,col,n){ for(let i=0;i<n;i++){ const a=Math.random()*6.28,s=1+Math.random()*3; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:12+Math.random()*10,col}); } }
+  const parts=[], rings=[];
+  function spark(x,y,col,n){ for(let i=0;i<n;i++){ const a=Math.random()*6.28,s=1+Math.random()*3.2; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:12+Math.random()*10,col,sz:Math.random()<0.28?3:2}); }
+    // white-hot core flecks — read as sparks off steel
+    for(let i=0;i<Math.max(1,n>>2);i++){ const a=Math.random()*6.28,s=2.4+Math.random()*3; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.4,life:5+Math.random()*5,col:'#fff6dc',sz:2,g:0.16}); } }
+  function ring(x,y,col){ rings.push({x,y,r:3,vr:1.7,life:14,col}); }
+  // directional impact burst: sparks fly off along the hit direction + an expanding ring
+  function burst(x,y,col,big,dir){ dir=dir||1; const n=big?9:5;
+    for(let i=0;i<n;i++){ const a=(Math.random()-0.5)*1.5+(dir>0?0:Math.PI), s=(big?3:2)+Math.random()*(big?4:3);
+      parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.2,life:10+Math.random()*8,col,sz:Math.random()<0.3?3:2}); }
+    spark(x,y,col,big?4:2); ring(x,y,big?'#ffe6b0':col); if(big) ring(x,y,'#fff'); }
   function startAttack(f,name){ const dat=ATT[name]; f.state='attack'; f.att=name; f.attT=0; f.attHit=false; f.vx*=0.3; f.combo=dat.next; f.comboBuf=0; if(!dat.throw) SFX.swing(f.weapon); }
   function addCombo(){ game.combo++; game.comboT=90; }
 
@@ -508,7 +516,8 @@
     updateShots(); updateBolts();
     for(let i=pickups.length-1;i>=0;i--){ const pk=pickups[i]; pk.t++; if(pk.vy!==0){ pk.y+=pk.vy; pk.vy+=0.22; if(pk.vy>0&&pk.t>12) pk.vy=0; }
       if(player.state!=='dead'&&Math.abs(pk.x-player.x)<16&&Math.abs(pk.y-player.y)<depthTol){ player.hp=Math.min(player.maxhp,player.hp+18); spark(pk.x,pk.y-6,'#6ee06e',12); SFX.block(); banner('+18 HP','#a9e5a9'); pickups.splice(i,1); } }
-    for(let i=parts.length-1;i>=0;i--){ const pt=parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.25; pt.life--; if(pt.life<=0) parts.splice(i,1); }
+    for(let i=parts.length-1;i>=0;i--){ const pt=parts[i]; pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=(pt.g!==undefined?pt.g:0.25); pt.vx*=0.98; pt.life--; if(pt.life<=0) parts.splice(i,1); }
+    for(let i=rings.length-1;i>=0;i--){ const rg=rings[i]; rg.r+=rg.vr; rg.vr*=0.9; rg.life--; if(rg.life<=0) rings.splice(i,1); }
 
     // player death → lives / gameover
     if(player.state==='dead'&&player.deadT>50){
@@ -666,12 +675,16 @@
     const throwing=f.state==='attack'&&ATT[f.att].throw;
     if(f.state==='attack'&&!throwing){
       const dat=ATT[f.att]; const swing=Math.min(1,Math.max(0,(f.attT-dat.startup*0.4)/(dat.startup+dat.active))); const ang=-2.2+swing*3.4;
-      ctx.save(); ctx.translate(8,-30); ctx.rotate(ang);
       const wlen=(dat.reach+(f.isPlayer?f.reachBonus:0))*0.9, ww=f.weapon==='maul'?8:(f.weapon==='cleave'?7:(f.weapon==='spear'||f.weapon==='staff'?3:4));
+      const active=f.attT>dat.startup&&f.attT<=dat.startup+dat.active;
+      ctx.save(); ctx.translate(8,-30);
+      // motion-blur afterimages trailing the blade through the active swing
+      if(active){ for(let k=1;k<=3;k++){ const ga=-2.2+Math.max(0,swing-k*0.12)*3.4; ctx.save(); ctx.rotate(ga); ctx.globalAlpha=0.14*(4-k)/3; ctx.fillStyle=p.weap; ctx.fillRect(0,-ww/2,wlen,ww); ctx.restore(); } ctx.globalAlpha=1; }
+      ctx.rotate(ang);
       ctx.fillStyle=p.weap; ctx.fillRect(0,-ww/2,wlen,ww);
       if(f.weapon==='spear'){ ctx.fillStyle=T; ctx.beginPath(); ctx.moveTo(wlen,-4); ctx.lineTo(wlen+7,0); ctx.lineTo(wlen,4); ctx.fill(); }
       ctx.fillStyle=T; ctx.fillRect(-3,-4,5,8);
-      if(f.attT>dat.startup&&f.attT<=dat.startup+dat.active){ ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,wlen,-0.6,0.7); ctx.stroke(); }
+      if(active){ ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(0,0,wlen,-0.6,0.7); ctx.stroke(); ctx.strokeStyle='rgba(255,240,190,.35)'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,wlen,-0.5,0.55); ctx.stroke(); }
       ctx.restore();
     } else if(f.state==='windup'){
       const dat=ATT[f.swing]||ATT.gswing, ang=-1.3-wp*1.0;
@@ -768,6 +781,15 @@
     ctx.save(); ctx.translate(-cam*0.05+sx,sy*0.4);
     const mg=ctx.createRadialGradient(320,42,4,320,42,44); mg.addColorStop(0,'rgba(240,240,215,.5)'); mg.addColorStop(1,'rgba(240,240,215,0)'); ctx.fillStyle=mg; ctx.fillRect(276,-4,88,92);
     ctx.fillStyle='#eae6cc'; blob(320,42,11); ctx.restore();
+    // distant ridgelines — rolling hills for atmospheric depth (two layers, fading toward the sky)
+    { const base=150; ctx.save(); ctx.translate(sx,sy*0.3);
+      ctx.fillStyle=shade(t.hz,20); ctx.globalAlpha=0.55; const o2=cam*0.05;
+      ctx.beginPath(); ctx.moveTo(0,base); for(let x=0;x<=W;x+=14){ const wx=x+o2; ctx.lineTo(x,131+Math.sin(wx*0.009+1)*8+Math.sin(wx*0.021)*3); } ctx.lineTo(W,base); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=shade(t.hz,9); ctx.globalAlpha=0.8; const o1=cam*0.085;
+      ctx.beginPath(); ctx.moveTo(0,base); for(let x=0;x<=W;x+=12){ const wx=x+o1; ctx.lineTo(x,139+Math.sin(wx*0.013)*9+Math.sin(wx*0.032+2)*4); } ctx.lineTo(W,base); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=1; ctx.restore(); }
+    // horizon haze — soft light band that separates the far layers
+    { const hz=ctx.createLinearGradient(0,126,0,164); hz.addColorStop(0,'rgba(0,0,0,0)'); hz.addColorStop(1,t.fog); ctx.fillStyle=hz; ctx.fillRect(0,126,W,38); }
     // birds drifting across the sky (flock crosses every ~18s)
     const bc=(now/44)%760; if(bc<170){ const bx=W+30-bc/170*(W+90), by=52+Math.sin(now/320)*6, fl=now/90; for(let k=0;k<3;k++) drawBird(bx-k*11, by+(k%2?5:0), fl+k); }
     treeRow(cam,0.13,sx,sy,110,150,1.5,t.hz,t.hz,t.hz,1.6);
@@ -815,7 +837,8 @@
     for(const b of ebolts){ const bx=Math.round(b.x), by=Math.round(b.y), dir=Math.sign(b.vx)||1;
       if(b.kind==='magic'){ const og=ctx.createRadialGradient(bx,by,1,bx,by,9); og.addColorStop(0,'rgba(200,140,255,.95)'); og.addColorStop(1,'rgba(160,90,240,0)'); ctx.fillStyle=og; ctx.beginPath(); ctx.arc(bx,by,9,0,6.283); ctx.fill(); ctx.fillStyle='#e0c0ff'; ctx.beginPath(); ctx.arc(bx,by,3,0,6.283); ctx.fill(); }
       else { ctx.fillStyle='#6a4a2a'; ctx.fillRect(bx-dir*8,by-1,16,2); ctx.fillStyle='#c9c2b4'; ctx.beginPath(); ctx.moveTo(bx+dir*8,by); ctx.lineTo(bx+dir*3,by-3); ctx.lineTo(bx+dir*3,by+3); ctx.closePath(); ctx.fill(); ctx.fillStyle='#8a9a6a'; ctx.fillRect(bx-dir*8,by-2,3,4); } }
-    for(const pt of parts){ ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,2,2); } ctx.globalAlpha=1;
+    for(const pt of parts){ const z=pt.sz||2; ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,z,z); } ctx.globalAlpha=1;
+    for(const rg of rings){ ctx.globalAlpha=Math.max(0,rg.life/14)*0.85; ctx.strokeStyle=rg.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rg.x,rg.y,rg.r,0,6.283); ctx.stroke(); } ctx.globalAlpha=1;
     // foreground swaying grass (frames the stage bottom, adds life)
     { const nw=performance.now(); for(let x=Math.floor(cam/26)*26; x<cam+W+20; x+=26){ const s=((x*2654435761>>>0)%1000)/1000; const gy=FLOOR_BOT+4+s*10; const sway=Math.sin(nw/620+x*0.3)*3.2; ctx.fillStyle=s>0.5?shade(tf.floor,-26):shade(tf.floor,-14);
       for(let b=0;b<3;b++){ const bx=x+b*5-5; ctx.beginPath(); ctx.moveTo(bx-1.6,gy+8); ctx.lineTo(bx+sway*(0.5+b*0.25),gy-7-s*5); ctx.lineTo(bx+1.6,gy+8); ctx.closePath(); ctx.fill(); } } }

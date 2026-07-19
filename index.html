@@ -33,6 +33,7 @@
   addEventListener('resize', resize); resize();
 
   const FLOOR_TOP=168, FLOOR_BOT=250, WORLD_LEN=2450;
+  const LEN=()=>(game&&game.levelLen)||WORLD_LEN;
   const depthScale = y => 0.82 + (y-FLOOR_TOP)/(FLOOR_BOT-FLOOR_TOP)*0.30;
   const F=1/60;
   const _sc={};
@@ -86,12 +87,48 @@
   };
 
   // ---- Stage script: gates trigger screen-lock encounters ----
-  function buildStage(){ return [
-    {x:520,  waves:[['grunt','grunt']],                         reward:true, started:false, done:false},
-    {x:1040, waves:[['grunt','spearman'],['grunt','grunt']],    reward:true, started:false, done:false},
-    {x:1580, waves:[['shieldbreaker','grunt'],['berserker','spearman']], reward:true, started:false, done:false},
-    {x:2180, waves:[['captain','grunt','grunt']], boss:true,    reward:false, started:false, done:false},
-  ]; }
+  // ---- WORLD → LEVELS (level-slot architecture; add worlds by extending WORLDS) ----
+  const FOREST = {
+    name:'THE FOREST',
+    levels:[
+      { name:'WOODLAND PATH', song:'forest1', theme:'woodland',
+        encounters:[ [['grunt','grunt']], [['grunt','spearman']] ],
+        mini:{type:'shieldbreaker', name:'OAKFIST', sub:'Bulwark of the Path', hp:240, traits:{armor:true}} },
+      { name:'MISTY GROVE', song:'forest2', theme:'mist',
+        encounters:[ [['spearman','grunt']], [['grunt','grunt','grunt']] ],
+        mini:{type:'spearman', name:'NETTLE', sub:'Thornspear Duelist', hp:175, traits:{savage:true}} },
+      { name:'THORNWOOD', song:'forest3', theme:'thorn',
+        encounters:[ [['berserker','grunt']], [['shieldbreaker','spearman']] ],
+        mini:{type:'berserker', name:'BRAMBLEHIDE', sub:'The Maddened', hp:270, traits:{savage:true}} },
+      { name:'ANCIENT ROOTS', song:'forest4', theme:'roots',
+        encounters:[ [['shieldbreaker','berserker']], [['spearman','spearman','grunt']] ],
+        mini:{type:'shieldbreaker', name:'IRONBARK', sub:'Root-Warden', hp:320, traits:{giant:true}} },
+    ],
+    boss:{type:'captain', name:'THE FOREST WARDEN', sub:'Guardian of the Wood', hp:440,
+      pal:{armor:'#3f6b3a',trim:'#9ad09a',dark:'#182e18',skin:'#c8a874',plume:'#e6c030',weap:'#e2eede'}},
+  };
+  const WORLDS=[FOREST];
+  function buildLevel(li){ const L=FOREST.levels[li]; const gates=[]; let x=500;
+    L.encounters.forEach(waves=>{ gates.push({x, waves, done:false, started:false}); x+=500; });
+    gates.push({x, mini:L.mini, done:false, started:false});
+    return { name:L.name, song:L.song, theme:L.theme, len:x+170, gates, boss:false, idx:li }; }
+  function buildBossLevel(){ return { name:"THE WARDEN'S GLADE", song:'boss', theme:'glade', len:840, boss:true,
+    gates:[{x:540, worldboss:FOREST.boss, adds:[['grunt','grunt']], done:false, started:false}] }; }
+  function loadLevel(li){
+    const lv = li>=FOREST.levels.length ? buildBossLevel() : buildLevel(li);
+    game.levelIdx=li; game.level=lv; game.gateIdx=0; game.waveIdx=0; game.levelLen=lv.len; game.levelName=lv.name; game.theme=lv.theme; game.song=lv.song;
+    game.lock=false; game.progressWall=0; game.camX=0;
+    player.x=60; player.vx=0; player.vy=0; player.state='idle';
+    enemies.length=0; shots.length=0; pickups.length=0; props.length=0;
+    for(let bx=280,k=0; bx<lv.len-200; bx+=Math.round(300+((k*97)%150)),k++){ props.push({x:bx,y:FLOOR_TOP+18+((k%3)*24),broken:0,t:0}); }
+    banner(FOREST.name+'  ·  '+lv.name, '#a9e5a9'); msgT=120;
+  }
+  function spawnBoss(def){ const e=spawnEnemy(def.type, game.camX+W-60, 238); if(!e) return e;
+    e.boss=true; e.name=def.name;
+    if(def.traits){ if(def.traits.giant) makeElite(e,'giant'); if(def.traits.savage) makeElite(e,'savage'); if(def.traits.armor) e.armor=true; }
+    if(def.pal) e.pal=def.pal;
+    e.hp=e.maxhp=def.hp; e.elite=null; e.eliteTag=null;
+    game.nameCard={t:0,name:def.name,sub:def.sub}; game.punch=1; return e; }
 
   const UPGRADES=[
     {k:'Vigor',      d:'+25 max health, full heal', ap:p=>{p.maxhp+=25; p.hp=p.maxhp;}},
@@ -145,13 +182,13 @@
       build:{helm:'crest',cape:'#c94f4f',shield:'kite',pauld:'plate',bulk:1.0},
       pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
     enemies=[];
-    game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, stage:buildStage(), lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0 };
+    game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
     shots.length=0; pickups.length=0; props.length=0;
     hitstop=0; shake=0; msg=''; msgT=0; msgCol='#e8dcc0';
-    if(mode==='endless'){ player.x=W/2; game.lock=true; startEndlessWave(); }
-    else if(mode==='tutorial'){ player.maxhp=500; player.hp=500; player.x=Math.round(W*0.34); game.tutStartX=player.x; game.tutStep=0; game.lock=true; game.camX=0;
+    if(mode==='endless'){ player.x=W/2; game.lock=true; game.levelLen=W; startEndlessWave(); }
+    else if(mode==='tutorial'){ player.maxhp=500; player.hp=500; player.x=Math.round(W*0.34); game.tutStartX=player.x; game.tutStep=0; game.lock=true; game.camX=0; game.levelLen=W;
       const d=spawnEnemy('grunt',Math.round(W*0.72),236); d.hp=d.maxhp=9999; d.name='DUMMY'; banner('TRAINING GROUNDS','#e6c030'); msgT=70; }
-    else { [300,470,760,1080,1360,1720,2020].forEach((bx,i)=> props.push({x:bx,y:FLOOR_TOP+18+(i%3)*24,broken:0,t:0})); banner('STAGE 1 — THE OUTER WARD','#e8dcc0'); msgT=90; }
+    else { loadLevel(0); }
   }
   function startEndlessWave(){ game.wave++; game.lock=true; game.camX=0; game.progressWall=0;
     const n=game.wave, count=Math.min(6, 2+Math.floor(n/2));
@@ -267,7 +304,7 @@
     // dynamic world clamp based on lock + camera
     let lo, hi;
     if(game.lock){ lo=game.camX+16; hi=game.camX+W-16; }
-    else { lo=Math.max(16,game.progressWall); hi=WORLD_LEN-16; }
+    else { lo=Math.max(16,game.progressWall); hi=LEN()-16; }
     return [lo,hi];
   }
   function clampPos(f){ const [lo,hi]=bounds(f); f.x=Math.max(lo,Math.min(hi,f.x)); f.y=Math.max(FLOOR_TOP,Math.min(FLOOR_BOT,f.y)); }
@@ -346,33 +383,31 @@
       }
       return;
     }
-    // trigger next gate when player crosses it
-    if(!g.lock && g.gateIdx<g.stage.length){
-      const gate=g.stage[g.gateIdx];
+    // ---- campaign: Forest World, level by level ----
+    const lv=g.level; if(!lv) return;
+    if(!g.lock && g.gateIdx<lv.gates.length){
+      const gate=lv.gates[g.gateIdx];
       if(!gate.started && player.x>=gate.x){
         gate.started=true; g.lock=true; g.waveIdx=0; g.progressWall=g.camX;
-        spawnWave(gate.waves[0]);
-        banner(gate.boss?'BOSS — THE CASTELLAN':'AMBUSH!', gate.boss?'#e6c030':'#e5a9a9');
+        if(gate.worldboss){ spawnBoss(gate.worldboss); if(gate.adds) spawnWave(gate.adds[0]); }
+        else if(gate.mini){ spawnBoss(gate.mini); banner('MINI-BOSS','#e6c030'); }
+        else { spawnWave(gate.waves[0]); banner('AMBUSH!','#e5a9a9'); }
       }
     }
-    // during a lock, manage waves
     if(g.lock){
-      const gate=g.stage[g.gateIdx];
+      const gate=lv.gates[g.gateIdx];
       if(livingFoes()===0 && enemies.every(e=>e.deadT>20 || e.state!=='dead')){
-        g.waveIdx++;
-        if(g.waveIdx<gate.waves.length){ spawnWave(gate.waves[g.waveIdx]); }
-        else {
-          g.lock=false; gate.done=true; g.progressWall=gate.x-40;
-          if(gate.boss){ g.state='clear'; banner('CASTLE CLEARED — press R','#a9e5a9'); msgT=999; SFX.win(); }
-          else if(gate.reward){ offerUpgrade(); }
-          g.gateIdx++;
-        }
+        if(gate.waves){ g.waveIdx++; if(g.waveIdx<gate.waves.length){ spawnWave(gate.waves[g.waveIdx]); return; } }
+        g.lock=false; gate.done=true; g.progressWall=gate.x-40;
+        if(gate.worldboss){ g.state='clear'; banner('THE FOREST IS CLEARED — press R','#a9e5a9'); msgT=999; SFX.win(); return; }
+        if(gate.mini){ SFX.win(); levelComplete(g.levelIdx+1); g.gateIdx++; return; }
+        offerUpgrade(); g.gateIdx++;
       }
     }
   }
+  function levelComplete(nextIdx){ game.state='levelclear'; game.nextLevel=nextIdx; game.levelClearT=0; banner('LEVEL COMPLETE','#a9e5a9'); msgT=999; }
   function spawnWave(list){ list.forEach((t,i)=>{ const e=spawnEnemy(t, game.camX+W-30+i*34, FLOOR_TOP+24+i*22);
-    if(e&&e.boss){ game.nameCard={t:0,name:'THE CASTELLAN',sub:'Warden of the Keep'}; game.punch=1; }
-    else if(e&&game.gateIdx>=2&&Math.random()<0.32){ const ks=Object.keys(ELITES); makeElite(e, ks[Math.floor(Math.random()*ks.length)]); } }); }
+    if(e&&game.mode==='campaign'&&game.levelIdx>=1&&Math.random()<0.30){ const ks=Object.keys(ELITES); makeElite(e, ks[Math.floor(Math.random()*ks.length)]); } }); }
 
   function offerUpgrade(){
     const up=UPGRADES.slice(), rl=RELICS.slice(), pick=[];
@@ -384,9 +419,9 @@
   function updateCamera(){
     if(game.lock) return; // frozen during fights
     const target=player.x - W*0.42;
-    game.camX = Math.max(0, Math.min(WORLD_LEN-W, target));
+    game.camX = Math.max(0, Math.min(LEN()-W, target));
     if(game.camX < game.progressWall-4) game.camX = game.progressWall-4;
-    game.camX = Math.max(0, Math.min(WORLD_LEN-W, game.camX));
+    game.camX = Math.max(0, Math.min(LEN()-W, game.camX));
   }
 
   function step(dt){
@@ -396,6 +431,7 @@
       if(pressed.reset) reset(game.mode);
       clearPressed(); return;
     }
+    if(game.state==='levelclear'){ game.levelClearT++; if(game.levelClearT>150 || pressed.confirm || pressed.light){ game.state='play'; loadLevel(game.nextLevel); } clearPressed(); return; }
     if(game.state==='gameover'||game.state==='clear'){ if(pressed.reset) reset(game.mode); clearPressed(); if(msgT<900) msgT=999; return; }
 
     if(hitstop>0){ hitstop--; for(const pt of parts){ pt.x+=pt.vx*0.2; pt.y+=pt.vy*0.2; } clearPressed(); return; }
@@ -619,12 +655,12 @@
     for(let i=0;i<game.lives;i++){ const lx=38+i*10, ly=33; ctx.fillStyle='#c94f4f'; ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+7,ly); ctx.lineTo(lx+3.5,ly+7); ctx.closePath(); ctx.fill(); }
     ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.textAlign='right';
     ctx.fillText('SCORE '+String(game.score).padStart(6,'0'), W-10, 16);
-    ctx.fillStyle='#c9b98a'; ctx.fillText(game.mode==='endless'?('WAVE '+game.wave):'STAGE 1', W-10, 28); ctx.textAlign='left';
+    ctx.fillStyle='#c9b98a'; ctx.fillText(game.mode==='endless'?('WAVE '+game.wave):(game.mode==='tutorial'?'TUTORIAL':(game.levelName||'')), W-10, 28); ctx.textAlign='left';
     if(game.combo>=2){ ctx.save(); ctx.textAlign='center'; ctx.globalAlpha=Math.min(1,0.4+game.comboT/60); ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText(game.combo+' HITS', W/2, 50); ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore(); }
     const boss=enemies.find(e=>e.boss&&e.state!=='dead');
-    if(boss){ ctx.fillStyle='#e6c030'; ctx.font='8px "Courier New"'; ctx.textAlign='center'; ctx.fillText('◆ THE CASTELLAN ◆',W/2,H-26); ctx.textAlign='left'; hbar(W/2-95,H-22,190,boss.hp,boss.maxhp,'#b04f9a','#5a2a4a',''); }
+    if(boss){ ctx.fillStyle='#e6c030'; ctx.font='8px "Courier New"'; ctx.textAlign='center'; ctx.fillText('◆ '+(boss.name||'BOSS')+' ◆',W/2,H-26); ctx.textAlign='left'; hbar(W/2-95,H-22,190,boss.hp,boss.maxhp,'#b04f9a','#5a2a4a',''); }
     // GO arrow
-    if(!game.lock && game.state==='play' && livingFoes()===0 && game.gateIdx<game.stage.length){
+    if(!game.lock && game.state==='play' && game.level && livingFoes()===0 && game.gateIdx<game.level.gates.length){
       const a=0.5+0.5*Math.sin(performance.now()/200); ctx.globalAlpha=a; ctx.fillStyle='#e8dcc0'; ctx.font='12px "Courier New"'; ctx.textAlign='right'; ctx.fillText('GO ▶', W-14, 40); ctx.textAlign='left'; ctx.globalAlpha=1;
     }
     // boss name-card
@@ -636,6 +672,12 @@
       ctx.fillStyle='#c9b98a'; ctx.font='9px "Courier New"'; ctx.fillText(nc.sub,W/2,H/2+12); ctx.textAlign='left'; ctx.restore(); }
     // messages
     else if(msgT>0){ ctx.fillStyle='#000'; ctx.fillRect(0,H/2-14,W,28); ctx.fillStyle=msgCol; ctx.font='14px "Courier New"'; ctx.textAlign='center'; ctx.fillText(msg,W/2,H/2+5); ctx.textAlign='left'; }
+    // level-complete transition
+    if(game.state==='levelclear'){ ctx.fillStyle='rgba(8,14,8,.82)'; ctx.fillRect(0,0,W,H); ctx.textAlign='center';
+      ctx.fillStyle='#a9e5a9'; ctx.font='20px "Courier New"'; ctx.fillText('LEVEL COMPLETE',W/2,H/2-14);
+      const nx=game.nextLevel, nm = nx>=FOREST.levels.length?"THE WARDEN'S GLADE — BOSS":FOREST.levels[nx].name;
+      ctx.fillStyle='#e6c030'; ctx.font='11px "Courier New"'; ctx.fillText('NEXT — '+nm,W/2,H/2+8);
+      if(performance.now()%900<560){ ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.fillText('press '+keyName(BIND.light)+' / A to continue',W/2,H/2+28); } ctx.textAlign='left'; }
     // tutorial prompt
     if(game.mode==='tutorial'){ const step=TUT[game.tutStep];
       ctx.fillStyle='rgba(12,10,16,.82)'; ctx.fillRect(0,H-30,W,30); ctx.textAlign='center';
@@ -845,9 +887,9 @@
     keys, press:(k)=>{pressed[k]=true; keys[k]=true;}, release:(k)=>{keys[k]=false;},
     step:(n=1)=>{ for(let i=0;i<n;i++) step(F); render(); },
     reset, spawn:(t,x,y)=>spawnEnemy(t,x,y),
-    warp:(x)=>{ player.x=x; game.camX=Math.max(0,Math.min(WORLD_LEN-W,x-W*0.42)); },
+    warp:(x)=>{ player.x=x; game.camX=Math.max(0,Math.min(LEN()-W,x-W*0.42)); },
     killAll:()=>{ enemies.forEach(e=>{e.hp=0;e.state='dead';e.deadT=80;}); },
-    state:()=>({st:game.state,cam:Math.round(game.camX),lock:game.lock,gate:game.gateIdx,lives:game.lives,
+    state:()=>({st:game.state,cam:Math.round(game.camX),lock:game.lock,gate:game.gateIdx,lvl:game.levelIdx,lvlName:game.levelName,lives:game.lives,
       player:{x:Math.round(player.x),hp:player.hp,st:player.state},
       enemies:enemies.map(e=>({t:e.type,x:Math.round(e.x),hp:e.hp,st:e.state}))}),
     cap:()=>cv.toDataURL('image/png')

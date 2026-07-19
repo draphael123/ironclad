@@ -1069,7 +1069,9 @@
   function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
   function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
+  const BUILD='2026-07-19 · visuals+audio+systems+music';
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='left'; ctx.fillStyle='#4a8fce'; ctx.font='7px "Courier New"'; ctx.fillText('build '+BUILD, 6, 12);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
     logo(72); ['START','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,112+i*17,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST+(PROGRESS.rank>=0?'    FURTHEST  W'+(PROGRESS.world+1)+'·L'+(PROGRESS.level+1):''),W/2,H-24);

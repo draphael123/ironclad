@@ -326,12 +326,22 @@
     const interrupt=!(tgt.armor&&dat.dmg<12);
     const dir=Math.sign(tgt.x-att.x)||att.face;
     tgt.hp-=dmg; tgt.flash=6; dmgFloat(frontX(att),att.y-24-(tgt.z||0),dmg,att.isPlayer);
+    if(tgt.isPlayer){ game.hurtFlash=Math.max(game.hurtFlash||0,10); shake=Math.max(shake,6); game.combo=0; game.comboT=0; }   // taking a hit drops your combo
     if(tgt.isPlayer&&tgt.thorns&&att.state!=='dead'){ att.hp-=tgt.thorns; spark(att.x,att.y-16,'#8ab0ef',5); if(att.hp<=0){ att.hp=0; att.state='dead'; att.deadT=0; SFX.death(); game.score+=att.elite?250:100; game.bigFlash=8; } }
     if(interrupt){ tgt.vx=dir*dat.kb; tgt.state='hit'; tgt.hitStun=dmg>12?16:10; tgt.invul=6; tgt.att=null; tgt.telegraph=0; tgt.blockT=0; }
     else { tgt.vx+=dir*dat.kb*0.25; if(tgt.tough&&light) fx(2,frontX(att),att.y-16,'#c9d2e0',4); }
     if(att.isPlayer&&att.reaper&&tgt.hp>0&&!tgt.boss&&tgt.hp<=tgt.maxhp*0.15){ tgt.hp=0; spark(tgt.x,tgt.y-16,'#c02020',12); }
-    const bigHit=dmg>12; fx(bigHit?13:7,frontX(att),att.y-16, bigHit?'#ffffff':(tgt.state==='stagger'?'#ff9a4b':'#ffd66b'), bigHit?16:9); if(bigHit){ spark(frontX(att),att.y-16,'#ffd66b',10); ring(frontX(att),att.y-16,'#ffe6b0'); ring(frontX(att),att.y-16,'#ffffff'); burst(frontX(att),att.y-16,'#ffd66b',true,att.face); game.bigFlash=Math.max(game.bigFlash,4); } shake=Math.max(shake,bigHit?8.5:4.2); SFX.hit(bigHit,att.weapon); if(att.isPlayer){ gainValor(att,4); addCombo(); }
-    if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*4; fx(12,tgt.x,tgt.y-16,'#ffd66b',16); shake=8; SFX.death(); if(att.isPlayer){ game.score+=tgt.boss?500:(tgt.elite?250:100); game.bigFlash=8; } if(tgt.boss){ hitstop=Math.max(hitstop,26); game.punch=1; shake=12; } }
+    const bigHit=dmg>12; const shk=(cfg.shake!==undefined?cfg.shake:1);
+    const hs=Math.min(18,Math.round(3+dmg*0.6)), sn=Math.min(20,(bigHit?12:7)+Math.round(dmg*0.35));   // hitstop + sparks scale with damage
+    fx(hs,frontX(att),att.y-16, bigHit?'#ffffff':(tgt.state==='stagger'?'#ff9a4b':'#ffd66b'), sn);
+    if(bigHit){ spark(frontX(att),att.y-16,'#ffd66b',10); ring(frontX(att),att.y-16,'#ffe6b0'); ring(frontX(att),att.y-16,'#ffffff'); ring(frontX(att),att.y-16,'#ffffff',true); burst(frontX(att),att.y-16,'#ffd66b',true,att.face); game.bigFlash=Math.max(game.bigFlash,5); game.punch=Math.max(game.punch,0.5*shk); }
+    shake=Math.max(shake,bigHit?9:4.4);
+    if(att.isPlayer) att.vx+=att.face*(bigHit?2.2:1.0);   // lunge — force transfer
+    SFX.hit(bigHit,att.weapon,att.isPlayer?game.combo:0); if(att.isPlayer){ gainValor(att,4); addCombo(); }
+    if(tgt.hp<=0){ tgt.hp=0; tgt.state='dead'; tgt.deadT=0; tgt.vx=dir*(tgt.boss?4:5.6); const kb=tgt.boss?26:(tgt.elite?18:15);
+      fx(kb,tgt.x,tgt.y-16,'#ffd66b',tgt.elite?22:16); ring(tgt.x,tgt.y-16,'#ffffff',true); shake=Math.max(shake,tgt.boss?12:9); SFX.death();
+      if(att.isPlayer){ game.score+=tgt.boss?500:(tgt.elite?250:100); game.bigFlash=Math.max(game.bigFlash,tgt.boss?10:6); game.punch=Math.max(game.punch,(tgt.boss?1:0.4)*shk); }
+      if(tgt.boss){ hitstop=Math.max(hitstop,26); } }
   }
   function tryHit(att,dat){ const r=reachOf(att,dat); for(const t of targetsOf(att,r)) resolveHit(att,t,dat); if(att.isPlayer) breakProps(att,r); }
   function breakProps(att,r){ const hx=att.x+att.face*(12+r*0.5), half=r*0.5+14;
@@ -355,14 +365,16 @@
   function spark(x,y,col,n){ n=Math.max(1,Math.round(n*(cfg.particles||1))); for(let i=0;i<n;i++){ const a=Math.random()*6.28,s=1+Math.random()*3.2; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1,life:12+Math.random()*10,col,sz:Math.random()<0.28?3:2}); }
     // white-hot core flecks — read as sparks off steel
     for(let i=0;i<Math.max(1,n>>2);i++){ const a=Math.random()*6.28,s=2.4+Math.random()*3; parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.4,life:5+Math.random()*5,col:'#fff6dc',sz:2,g:0.16}); } }
-  function ring(x,y,col){ rings.push({x,y,r:3,vr:1.7,life:14,col}); }
+  function ring(x,y,col,fill){ rings.push({x,y,r:fill?2:3,vr:fill?2.6:1.7,life:fill?9:14,col,fill}); }
   // directional impact burst: sparks fly off along the hit direction + an expanding ring
   function burst(x,y,col,big,dir){ dir=dir||1; const n=Math.max(1,Math.round((big?9:5)*(cfg.particles||1)));
     for(let i=0;i<n;i++){ const a=(Math.random()-0.5)*1.5+(dir>0?0:Math.PI), s=(big?3:2)+Math.random()*(big?4:3);
       parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.2,life:10+Math.random()*8,col,sz:Math.random()<0.3?3:2}); }
     spark(x,y,col,big?4:2); ring(x,y,big?'#ffe6b0':col); if(big) ring(x,y,'#fff'); }
   function startAttack(f,name){ const dat=ATT[name]; f.state='attack'; f.att=name; f.attT=0; f.attHit=false; f.vx*=0.3; f.combo=dat.next; f.comboBuf=0; if(!dat.throw) SFX.swing(f.weapon); }
-  function addCombo(){ game.combo++; game.comboT=90; }
+  const COMBO_TIER=[[30,'RELENTLESS!','#ff5a3c'],[20,'SAVAGE!','#ff9a4b'],[10,'GREAT!','#e6c030']];
+  function addCombo(){ game.combo++; game.comboT=100; game.comboPop=1;
+    for(const [n,txt,col] of COMBO_TIER){ if(game.combo===n){ banner(txt,col); game.bigFlash=Math.max(game.bigFlash,4); break; } } }
 
   // ---- shield throw (boomerang projectile, cooldown) ----
   const SHIELD_RANGE=180;
@@ -388,7 +400,7 @@
     if(p.state==='dead'||p.invul>0||p.state==='roll'||p.state==='dash'||p.state==='sidestep') return;   // i-frames / dodges everything
     if(!unblock && p.state==='block' && p.face===-Math.sign(dir)){ p.flash=4; if(p.parryWindow>0){ /* no parry vs ranged/charge */ } fx(3,frontX(p),p.y-16,'#cfe0ff',5); shake=Math.max(shake,2); SFX.block(); return; }
     dmg=Math.round(dmg*(1+(game.worldIdx||0)*0.2)*(p.dmgMult||1)*diffMult()*enemyScale()); p.hp-=dmg; p.vx=Math.sign(dir||1)*4; p.state='hit'; p.hitStun=12; p.invul=8; p.flash=6;
-    fx(7,p.x,p.y-16,'#ff9a4b',9); dmgFloat(p.x,p.y-24,dmg,false); shake=Math.max(shake,5); SFX.hit(dmg>12);
+    fx(7,p.x,p.y-16,'#ff9a4b',9); dmgFloat(p.x,p.y-24,dmg,false); shake=Math.max(shake,6); game.hurtFlash=Math.max(game.hurtFlash||0,10); game.combo=0; game.comboT=0; SFX.hit(dmg>12);
     if(p.hp<=0){ p.hp=0; p.state='dead'; p.deadT=0; } }
   function fireBolt(f,kind){ ebolts.push({x:f.x+f.face*14,y:f.y-16,vx:f.face*(kind==='magic'?3.4:5.2),owner:f,kind,dmg:kind==='magic'?15:9,life:130,t:0}); SFX.swing(kind==='magic'?'staff':'bow'); }
   function updateBolts(){ for(let i=ebolts.length-1;i>=0;i--){ const b=ebolts[i]; b.x+=b.vx; b.t++; b.life--;
@@ -602,7 +614,7 @@
     updateStage();
     updateCamera();
     if(shake>0) shake*=0.85; if(msgT>0) msgT--; if(game.goPulse>0) game.goPulse--; if(game.bigFlash>0) game.bigFlash--; if(game.comboT>0){ game.comboT--; if(game.comboT===0) game.combo=0; }
-    if(game.punch>0) game.punch*=0.88; if(game.nameCard){ game.nameCard.t++; if(game.nameCard.t>150) game.nameCard=null; } if(game.tutFlash>0) game.tutFlash--;
+    if(game.punch>0) game.punch*=0.88; if(game.comboPop>0) game.comboPop*=0.8; if(game.hurtFlash>0) game.hurtFlash--; if(game.nameCard){ game.nameCard.t++; if(game.nameCard.t>150) game.nameCard=null; } if(game.tutFlash>0) game.tutFlash--;
     if(pressed.reset) reset();
     clearPressed();
   }
@@ -912,7 +924,7 @@
       if(b.kind==='magic'){ const og=ctx.createRadialGradient(bx,by,1,bx,by,9); og.addColorStop(0,'rgba(200,140,255,.95)'); og.addColorStop(1,'rgba(160,90,240,0)'); ctx.fillStyle=og; ctx.beginPath(); ctx.arc(bx,by,9,0,6.283); ctx.fill(); ctx.fillStyle='#e0c0ff'; ctx.beginPath(); ctx.arc(bx,by,3,0,6.283); ctx.fill(); }
       else { ctx.fillStyle='#6a4a2a'; ctx.fillRect(bx-dir*8,by-1,16,2); ctx.fillStyle='#c9c2b4'; ctx.beginPath(); ctx.moveTo(bx+dir*8,by); ctx.lineTo(bx+dir*3,by-3); ctx.lineTo(bx+dir*3,by+3); ctx.closePath(); ctx.fill(); ctx.fillStyle='#8a9a6a'; ctx.fillRect(bx-dir*8,by-2,3,4); } }
     for(const pt of parts){ const z=pt.sz||2; ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,z,z); } ctx.globalAlpha=1;
-    for(const rg of rings){ ctx.globalAlpha=Math.max(0,rg.life/14)*0.85; ctx.strokeStyle=rg.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rg.x,rg.y,rg.r,0,6.283); ctx.stroke(); } ctx.globalAlpha=1;
+    for(const rg of rings){ if(rg.fill){ ctx.globalAlpha=Math.max(0,rg.life/9)*0.7; ctx.fillStyle=rg.col; ctx.beginPath(); ctx.arc(rg.x,rg.y,rg.r,0,6.283); ctx.fill(); } else { ctx.globalAlpha=Math.max(0,rg.life/14)*0.85; ctx.strokeStyle=rg.col; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rg.x,rg.y,rg.r,0,6.283); ctx.stroke(); } } ctx.globalAlpha=1;
     // boss hazards
     for(const h of hazards){ if(h.kind==='wave'){ const a=Math.max(0,h.life/70); ctx.globalAlpha=a*0.9; ctx.strokeStyle=h.col; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(h.x,h.y-16); ctx.lineTo(h.x,h.y+3); ctx.stroke(); ctx.globalAlpha=a*0.5; ctx.beginPath(); ctx.ellipse(h.x,h.y+2,6,13,0,-1.3,1.3); ctx.stroke(); }
       else if(h.kind==='nova'){ ctx.globalAlpha=Math.max(0,h.life/40)*0.9; ctx.strokeStyle=h.col; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,6.283); ctx.stroke(); ctx.globalAlpha*=0.5; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,6.283); ctx.stroke(); } } ctx.globalAlpha=1;
@@ -928,6 +940,7 @@
     const vg=ctx.createRadialGradient(W/2,H*0.55,H*0.34,W/2,H*0.55,H*0.85); vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.42)');
     ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
     if(game.bigFlash>0){ ctx.fillStyle='rgba(255,255,255,'+(game.bigFlash/8*0.3)+')'; ctx.fillRect(0,0,W,H); }
+    if(game.hurtFlash>0){ const a=game.hurtFlash/10; const hv=ctx.createRadialGradient(W/2,H/2,H*0.28,W/2,H/2,H*0.72); hv.addColorStop(0,'rgba(200,20,20,0)'); hv.addColorStop(1,'rgba(190,10,10,'+(a*0.5).toFixed(3)+')'); ctx.fillStyle=hv; ctx.fillRect(0,0,W,H); }
 
     // ---- arcade HUD ----
     const pp=player.pal;
@@ -949,7 +962,14 @@
     ctx.fillStyle='#e8dcc0'; ctx.font='9px "Courier New"'; ctx.textAlign='right';
     ctx.fillText('SCORE '+String(game.score).padStart(6,'0'), W-10, 16);
     ctx.fillStyle='#c9b98a'; ctx.fillText(game.mode==='endless'?('WAVE '+game.wave):(game.mode==='tutorial'?'TUTORIAL':(game.levelName||'')), W-10, 28); ctx.textAlign='left';
-    if(game.combo>=2){ ctx.save(); ctx.textAlign='center'; ctx.globalAlpha=Math.min(1,0.4+game.comboT/60); ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText(game.combo+' HITS', W/2, 50); ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore(); }
+    if(game.combo>=2){ ctx.save(); ctx.textAlign='center'; ctx.globalAlpha=Math.min(1,0.4+game.comboT/60);
+      const c=game.combo, col=c>=30?'#ff5a3c':c>=20?'#ff9a4b':c>=10?'#ffd66b':'#e6c030';
+      const sz=16+Math.min(14,c*0.5)+(game.comboPop||0)*10;   // grows with combo + pops on hit
+      ctx.translate(W/2,52); ctx.scale(1+(game.comboPop||0)*0.12,1+(game.comboPop||0)*0.12);
+      ctx.fillStyle='#000'; ctx.font='bold '+sz+'px "Courier New"'; ctx.fillText(c+' HITS',1,1);
+      ctx.fillStyle=col; ctx.fillText(c+' HITS',0,0);
+      ctx.globalAlpha=Math.min(1,game.comboT/90)*0.7; ctx.font='7px "Courier New"'; ctx.fillStyle='#c9b98a'; ctx.fillText('COMBO',0,12);
+      ctx.globalAlpha=1; ctx.textAlign='left'; ctx.restore(); }
     const boss=enemies.find(e=>e.boss&&e.state!=='dead');
     if(boss){ ctx.fillStyle='#e6c030'; ctx.font='8px "Courier New"'; ctx.textAlign='center'; ctx.fillText('◆ '+(boss.name||'BOSS')+' ◆',W/2,H-26); ctx.textAlign='left'; hbar(W/2-95,H-22,190,boss.hp,boss.maxhp,'#b04f9a','#5a2a4a',''); }
     // GO arrow
@@ -1054,10 +1074,11 @@
     swing:(w)=>{ const s=WEAPSND[w]||WEAPSND.sword, dv=rnd(0.9,1.12), a=s.sw;
       osc(a[0]*dv,0.13,a[2],a[3],a[1]*dv,0.004); fnoise(0.09,0.05,3200,true);
       if(s.magic){ osc(900*dv,0.20,'sine',0.05,1500,0.012); osc(1350*dv,0.16,'sine',0.03,2100,0.02); } },
-    hit:(big,w)=>{ const s=WEAPSND[w]||WEAPSND.sword, dv=rnd(0.85,1.15);
+    hit:(big,w,combo)=>{ const s=WEAPSND[w]||WEAPSND.sword, dv=rnd(0.85,1.15), cp=1+Math.min(0.55,(combo||0)*0.025);   // pitch rises with combo
       fnoise(big?0.14:0.08, big?0.4:0.24, big?1500:2600);                       // impact crack
-      osc((big?76:s.hf)*dv, big?0.20:0.13, 'square', (big?0.32:0.2)*s.body, (big?40:s.hf*0.5)*dv, 0.002); // body
+      osc((big?76:s.hf)*dv*cp, big?0.20:0.13, 'square', (big?0.32:0.2)*s.body, (big?40:s.hf*0.5)*dv*cp, 0.002); // body
       if(big) osc(46*dv,0.24,'sine',0.42,30,0.002);                              // sub-thump weight
+      if(combo>0 && combo%1===0 && combo>=2) osc(660*cp,0.05,'triangle',0.06,880*cp,0.002);   // combo tick
       if(s.magic) osc(520*dv,0.18,'triangle',0.12,220,0.006); },
     block:()=>{ const dv=rnd(0.9,1.14);                                          // metallic clank
       osc(700*dv,0.10,'square',0.15,470,0.002); osc(1040*dv,0.09,'square',0.08,760,0.002,14);
@@ -1181,7 +1202,7 @@
   function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
   function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
-  const BUILD='2026-07-19d · boss signature moves · phases · distinct bosses';
+  const BUILD='2026-07-19e · impact pass · combo juice · hit weight';
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.textAlign='left'; ctx.fillStyle='#4a8fce'; ctx.font='7px "Courier New"'; ctx.fillText('build '+BUILD, 6, 12);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }

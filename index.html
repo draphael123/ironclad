@@ -579,34 +579,42 @@
   }
 
   const THEMES={
-    woodland:{ sky:['#1c2c1e','#2e4326','#3c5230'], hz:'#2a3a1e', trunk:'#16281a', can1:'#2c4a2a', can2:'#3a5c34', floor:'#2a3a1c', floor2:'#1c2a14', fog:'rgba(150,190,120,.05)', mote:'#cfe89a', ray:'rgba(255,240,170,.07)' },
-    mist:{ sky:['#1a2428','#28383c','#3a4c50'], hz:'#28383a', trunk:'#152225', can1:'#28444a', can2:'#3a5c62', floor:'#28383e', floor2:'#18262c', fog:'rgba(190,205,215,.12)', mote:'#d6ecf0', ray:'rgba(200,230,240,.06)' },
-    thorn:{ sky:['#241a12','#3a2816','#4e3820'], hz:'#33240f', trunk:'#1c1208', can1:'#4a3016', can2:'#704c22', floor:'#352612', floor2:'#241a0c', fog:'rgba(200,150,80,.06)', mote:'#f0c460', ray:'rgba(255,200,120,.08)' },
-    roots:{ sky:['#140f22','#221a34','#302442'], hz:'#20182e', trunk:'#0e0a18', can1:'#241a34', can2:'#38284e', floor:'#241a32', floor2:'#150f22', fog:'rgba(150,120,200,.08)', mote:'#c090ff', ray:'rgba(160,120,240,.06)' },
-    glade:{ sky:['#12220f','#1e3618','#2c4c22'], hz:'#243a18', trunk:'#0e1c0c', can1:'#24401e', can2:'#3c6428', floor:'#26401a', floor2:'#182a0e', fog:'rgba(170,220,120,.12)', mote:'#daff90', ray:'rgba(220,255,150,.10)' },
+    woodland:{ sky:['#1c2c1e','#2e4326','#3c5230'], hz:'#2a3a1e', trunk:'#16281a', can1:'#2c4a2a', can2:'#3a5c34', floor:'#2a3a1c', floor2:'#1c2a14', fog:'rgba(150,190,120,.05)', mote:'#cfe89a', ray:'rgba(255,240,170,.07)', leaf:'#4a7a34' },
+    mist:{ sky:['#1a2428','#28383c','#3a4c50'], hz:'#28383a', trunk:'#152225', can1:'#28444a', can2:'#3a5c62', floor:'#28383e', floor2:'#18262c', fog:'rgba(190,205,215,.12)', mote:'#d6ecf0', ray:'rgba(200,230,240,.06)', leaf:'#9ab8c0' },
+    thorn:{ sky:['#241a12','#3a2816','#4e3820'], hz:'#33240f', trunk:'#1c1208', can1:'#4a3016', can2:'#704c22', floor:'#352612', floor2:'#241a0c', fog:'rgba(200,150,80,.06)', mote:'#f0c460', ray:'rgba(255,200,120,.08)', leaf:'#c07830' },
+    roots:{ sky:['#140f22','#221a34','#302442'], hz:'#20182e', trunk:'#0e0a18', can1:'#241a34', can2:'#38284e', floor:'#241a32', floor2:'#150f22', fog:'rgba(150,120,200,.08)', mote:'#c090ff', ray:'rgba(160,120,240,.06)', leaf:'#9a6ad0' },
+    glade:{ sky:['#12220f','#1e3618','#2c4c22'], hz:'#243a18', trunk:'#0e1c0c', can1:'#24401e', can2:'#3c6428', floor:'#26401a', floor2:'#182a0e', fog:'rgba(170,220,120,.12)', mote:'#daff90', ray:'rgba(220,255,150,.10)', leaf:'#7ac040' },
   };
   function blob(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fill(); }
-  function treeRow(cam,par,sx,sy,spacing,baseY,scale,trunk,can1,can2){
-    const off=cam*par; ctx.save(); ctx.translate(-off+sx,sy);
+  function treeRow(cam,par,sx,sy,spacing,baseY,scale,trunk,can1,can2,sway){
+    const off=cam*par, now=performance.now(); ctx.save(); ctx.translate(-off+sx,sy);
     const x0=Math.floor(off/spacing)*spacing-spacing;
     for(let x=x0; x<off+W+spacing; x+=spacing){ const s=((x*2654435761>>>0)%1000)/1000; const jx=x+(s-0.5)*spacing*0.4; const th=(0.75+s*0.55)*scale; const top=baseY-(30+s*28)*scale;
+      const sw=(sway||0)*Math.sin(now/1300+s*6);
       ctx.fillStyle=trunk; ctx.fillRect(jx-2.5*th,top,5*th,baseY-top);
-      ctx.fillStyle=can1; blob(jx,top,15*th); blob(jx+8*th,top+5*th,10*th); blob(jx-8*th,top+6*th,9*th);
-      ctx.fillStyle=can2; blob(jx-3*th,top-6*th,9*th); }
+      ctx.fillStyle=can1; blob(jx+sw,top,15*th); blob(jx+8*th+sw,top+5*th,10*th); blob(jx-8*th+sw*0.6,top+6*th,9*th);
+      ctx.fillStyle=can2; blob(jx-3*th+sw,top-6*th,9*th); }
     ctx.restore();
   }
+  function drawBird(x,y,f){ ctx.fillStyle='rgba(18,22,18,.75)'; const w=2+Math.abs(Math.sin(f))*4; ctx.beginPath(); ctx.moveTo(x-5,y+w); ctx.lineTo(x,y-1); ctx.lineTo(x+5,y+w); ctx.lineTo(x,y+2); ctx.closePath(); ctx.fill(); }
   function drawForest(cam,sx,sy){
-    const t=THEMES[game.theme]||THEMES.woodland;
+    const t=THEMES[game.theme]||THEMES.woodland, now=performance.now();
     const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,t.sky[0]); g0.addColorStop(.45,t.sky[1]); g0.addColorStop(.62,t.sky[2]); g0.addColorStop(.64,t.hz); g0.addColorStop(1,t.floor2);
     ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.save(); ctx.translate(-cam*0.05+sx,sy*0.4);
     const mg=ctx.createRadialGradient(320,42,4,320,42,44); mg.addColorStop(0,'rgba(240,240,215,.5)'); mg.addColorStop(1,'rgba(240,240,215,0)'); ctx.fillStyle=mg; ctx.fillRect(276,-4,88,92);
     ctx.fillStyle='#eae6cc'; blob(320,42,11); ctx.restore();
-    treeRow(cam,0.13,sx,sy,110,150,1.5,t.hz,t.hz,t.hz);
+    // birds drifting across the sky (flock crosses every ~18s)
+    const bc=(now/44)%760; if(bc<170){ const bx=W+30-bc/170*(W+90), by=52+Math.sin(now/320)*6, fl=now/90; for(let k=0;k<3;k++) drawBird(bx-k*11, by+(k%2?5:0), fl+k); }
+    treeRow(cam,0.13,sx,sy,110,150,1.5,t.hz,t.hz,t.hz,1.6);
     ctx.save(); for(let i=0;i<5;i++){ const gx=((i*130-cam*0.2)%(W+180)+(W+180))%(W+180)-90; const grd=ctx.createLinearGradient(gx,30,gx+60,182); grd.addColorStop(0,t.ray); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.beginPath(); ctx.moveTo(gx,30); ctx.lineTo(gx+22,30); ctx.lineTo(gx+70,182); ctx.lineTo(gx+34,182); ctx.closePath(); ctx.fill(); } ctx.restore();
-    treeRow(cam,0.34,sx,sy,150,160,2.0,t.trunk,t.can1,t.can2);
+    treeRow(cam,0.34,sx,sy,150,160,2.0,t.trunk,t.can1,t.can2,3.2);
     ctx.fillStyle=t.fog; ctx.fillRect(0,118,W,58);
-    const now=performance.now(); ctx.fillStyle=t.mote;
+    // drifting leaves (foreground life)
+    ctx.fillStyle=t.leaf;
+    for(let i=0;i<16;i++){ const cyc=((now/3200+i*0.41)%1); const lx=(((i*173)+Math.sin(now/700+i*1.3)*36-cam*0.55)%(W+60)+(W+60))%(W+60)-30; const ly=40+cyc*210; ctx.save(); ctx.translate(lx,ly); ctx.rotate(now/260+i); ctx.globalAlpha=0.72; ctx.fillRect(-2.5,-1.2,5,2.4); ctx.restore(); } ctx.globalAlpha=1;
+    // fireflies / motes
+    ctx.fillStyle=t.mote;
     for(let i=0;i<20;i++){ const fx=(((i*151-cam*0.5)%(W+40))+(W+40))%(W+40)-20; const fy=96+((i*57)%86)+Math.sin(now/700+i)*7; ctx.globalAlpha=Math.max(0,0.35+0.55*Math.sin(now/480+i*1.7)); ctx.fillRect(fx,fy,2,2); } ctx.globalAlpha=1;
   }
   function render(){
@@ -640,6 +648,9 @@
       ctx.fillStyle='#5b7fb0'; ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(6,-3); ctx.lineTo(4,7); ctx.lineTo(-4,7); ctx.lineTo(-6,-3); ctx.closePath(); ctx.fill();
       ctx.fillStyle='#a9c6ef'; ctx.fillRect(-1,-6,2,12); ctx.fillRect(-5,-1,10,2); ctx.restore(); }
     for(const pt of parts){ ctx.fillStyle=pt.col; ctx.globalAlpha=Math.min(1,pt.life/12); ctx.fillRect(pt.x,pt.y,2,2); } ctx.globalAlpha=1;
+    // foreground swaying grass (frames the stage bottom, adds life)
+    { const nw=performance.now(); for(let x=Math.floor(cam/26)*26; x<cam+W+20; x+=26){ const s=((x*2654435761>>>0)%1000)/1000; const gy=FLOOR_BOT+4+s*10; const sway=Math.sin(nw/620+x*0.3)*3.2; ctx.fillStyle=s>0.5?shade(tf.floor,-26):shade(tf.floor,-14);
+      for(let b=0;b<3;b++){ const bx=x+b*5-5; ctx.beginPath(); ctx.moveTo(bx-1.6,gy+8); ctx.lineTo(bx+sway*(0.5+b*0.25),gy-7-s*5); ctx.lineTo(bx+1.6,gy+8); ctx.closePath(); ctx.fill(); } } }
     ctx.restore();
 
     // vignette + kill flash

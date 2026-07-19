@@ -46,9 +46,27 @@
 
   const keys={}, pressed={};
   const MOVE={ ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down' };
-  const SYS={ Escape:'pause',KeyP:'pause',Enter:'confirm',KeyR:'reset',Digit1:'opt1',Digit2:'opt2',Digit3:'opt3' };
+  const SYS={ Escape:'pause',KeyP:'pause',Enter:'confirm',KeyR:'reset',Digit1:'opt1',Digit2:'opt2',Digit3:'opt3',Digit4:'opt4',Digit5:'opt5' };
   let BIND={ light:'KeyJ', heavy:'KeyK', grab:'KeyI', block:'KeyL' };
   let DISCOVERED={}, PROGRESS={world:0,level:0,rank:-1};   // persisted save: bestiary unlocks + furthest reached
+  let CHAR={ level:1, xp:0, unspent:0, stats:{vit:0,str:0,reach:0,guard:0,focus:0} };   // persistent RPG character
+  const STAT_DEFS=[
+    {k:'vit',  name:'VITALITY', d:'+12 max health'},
+    {k:'str',  name:'STRENGTH', d:'+8% attack damage'},
+    {k:'reach',name:'REACH',    d:'+3 weapon reach'},
+    {k:'guard',name:'GUARD',    d:'-6% damage taken'},
+    {k:'focus',name:'FOCUS',    d:'+15% Valor gain'},
+  ];
+  function xpForLevel(lv){ return 30 + (lv-1)*22; }                 // rising threshold
+  function xpFor(e){ let x=Math.round((e.maxhp||40)/4); if(e.elite)x*=2; if(e.boss)x*=5; return Math.max(3,x); }
+  function enemyScale(){ return 1 + Math.max(0,CHAR.level-1)*0.035; }   // enemies keep pace with the knight
+  function applyCharStats(p){ if(!p) return; const s=CHAR.stats;
+    p.maxhp=100+s.vit*12; p.hp=Math.min(p.maxhp,p.hp||p.maxhp);
+    p.strMult=1+s.str*0.08; p.reachBonus=s.reach*3; p.dmgMult=Math.pow(0.94,s.guard); p.valorMult=1+s.focus*0.15; }
+  function gainXP(a){ if(!game||game.mode==='tutorial') return; CHAR.xp+=a; let leveled=false;
+    while(CHAR.xp>=xpForLevel(CHAR.level)){ CHAR.xp-=xpForLevel(CHAR.level); CHAR.level++; CHAR.unspent++; leveled=true; }
+    if(leveled){ SFX.win(); banner('LEVEL UP!','#e6c030'); game.luSel=0; if(game.state==='play') game.state='levelup'; }
+    saveCfg(); }
   let rebinding=null;
   function mapCode(code){ if(MOVE[code]) return MOVE[code]; if(code==='Space') return 'block'; if(code==='ShiftLeft'||code==='ShiftRight') return 'dodge'; if(code==='KeyU') return 'sthrow'; if(code==='KeyO') return 'art'; for(const a in BIND) if(BIND[a]===code) return a; if(SYS[code]) return SYS[code]; return null; }
   addEventListener('keydown', e=>{
@@ -205,7 +223,7 @@
       spd:o.spd||1.7,swing:o.swing,tele:o.tele||24,canBlock:o.canBlock||0,armor:!!o.armor,tough:!!o.tough,keep:o.keep||0,weapon:o.weapon||'sword',build:o.build||null,ranged:o.ranged||null,charge:!!o.charge,evade:!!o.evade,chargeT:0,chargeHit:false,
       vx:0,vy:0,state:'idle',att:null,attT:0,attHit:false,combo:null,comboBuf:0,
       hitStun:0,stunT:0,downT:0,invul:0,flash:0,deadT:0,parryWindow:0,blockT:0,think:0,telegraph:0,
-      reachBonus:0,parryHeal:0,grabHeal:0,dmgMult:1,heavyMult:1,
+      reachBonus:0,parryHeal:0,grabHeal:0,dmgMult:1,heavyMult:1,strMult:1,
       z:0,zv:0,dashT:0,tapDir:0,tapT:0,valor:0,artT:0,
       rollT:0,hasShield:true,shieldCd:0,squash:0,
       thorns:0,stormparry:0,valorMult:1,reaper:0, elite:null,eliteAura:null,eliteTag:null,enrageAble:false,enraged:false };
@@ -219,7 +237,7 @@
     const e=makeFighter({type,name:type.toUpperCase(),face:-1,boss:a.boss,
       x:x!=null?x:game.camX+W+20, y:y!=null?y:FLOOR_TOP+20+Math.random()*(FLOOR_BOT-FLOOR_TOP-30),
       hp:a.hp,pal:a.pal,size:a.size,spd:a.spd,swing:a.swing,tele:a.tele,canBlock:a.canBlock,armor:a.armor,tough:a.tough,keep:a.keep,weapon:a.weapon,build:a.build,ranged:a.ranged,charge:a.charge,evade:a.evade});
-    const wsc=1+(game.worldIdx||0)*0.3; if(wsc!==1){ e.hp=e.maxhp=Math.round(e.maxhp*wsc); }   // later worlds: tougher rank-and-file
+    const wsc=(1+(game.worldIdx||0)*0.3)*enemyScale(); if(wsc!==1){ e.hp=e.maxhp=Math.round(e.maxhp*wsc); }   // later worlds + level-scaling
     if(game.mode!=='tutorial') discover(type);   // bestiary unlock
     enemies.push(e); return e;
   }
@@ -229,6 +247,7 @@
     player=makeFighter({x:60,y:225,face:1,isPlayer:true,hp:100,name:'KNIGHT',weapon:'sword',
       build:{helm:'crest',cape:'#c94f4f',shield:'kite',pauld:'plate',bulk:1.0},
       pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
+    if(mode!=='tutorial'){ applyCharStats(player); player.hp=player.maxhp; }   // persistent RPG stats
     enemies=[];
     game={ state:'play', camX:0, progressWall:0, lock:false, gateIdx:0, waveIdx:0, worldIdx:0, nextWorld:0, level:null, levelIdx:0, levelLen:WORLD_LEN, levelName:'', theme:'', song:'', lives:3, choices:[], goPulse:0, score:0, bigFlash:0, combo:0, comboT:0, punch:0, nameCard:null, mode, wave:0, nextLevel:0, levelClearT:0 };
     shots.length=0; pickups.length=0; props.length=0; ebolts.length=0;
@@ -295,8 +314,9 @@
     const light=dat.dmg<=6;
     let dmg=dat.dmg*(tgt.state==='stagger'?1.6:1);
     if(att.isPlayer&&att.att==='heavy') dmg*=att.heavyMult;
+    if(att.isPlayer&&att.strMult) dmg*=att.strMult;   // STRENGTH stat
     if(att.enraged) dmg*=1.3;
-    if(!att.isPlayer) dmg*=(1+(game.worldIdx||0)*0.2)*diffMult();   // later worlds hit harder · difficulty
+    if(!att.isPlayer) dmg*=(1+(game.worldIdx||0)*0.2)*diffMult()*enemyScale();   // later worlds · difficulty · level-scaling
     if(tgt.isPlayer) dmg*=tgt.dmgMult;
     if(tgt.tough&&light) dmg=Math.max(1,dmg*0.2);
     dmg=Math.round(dmg);
@@ -364,7 +384,7 @@
   function hurtPlayer(dmg,dir,unblock){ const p=player;
     if(p.state==='dead'||p.invul>0||p.state==='roll'||p.state==='dash'||p.state==='sidestep') return;   // i-frames / dodges everything
     if(!unblock && p.state==='block' && p.face===-Math.sign(dir)){ p.flash=4; if(p.parryWindow>0){ /* no parry vs ranged/charge */ } fx(3,frontX(p),p.y-16,'#cfe0ff',5); shake=Math.max(shake,2); SFX.block(); return; }
-    dmg=Math.round(dmg*(1+(game.worldIdx||0)*0.2)*(p.dmgMult||1)*diffMult()); p.hp-=dmg; p.vx=Math.sign(dir||1)*4; p.state='hit'; p.hitStun=12; p.invul=8; p.flash=6;
+    dmg=Math.round(dmg*(1+(game.worldIdx||0)*0.2)*(p.dmgMult||1)*diffMult()*enemyScale()); p.hp-=dmg; p.vx=Math.sign(dir||1)*4; p.state='hit'; p.hitStun=12; p.invul=8; p.flash=6;
     fx(7,p.x,p.y-16,'#ff9a4b',9); dmgFloat(p.x,p.y-24,dmg,false); shake=Math.max(shake,5); SFX.hit(dmg>12);
     if(p.hp<=0){ p.hp=0; p.state='dead'; p.deadT=0; } }
   function fireBolt(f,kind){ ebolts.push({x:f.x+f.face*14,y:f.y-16,vx:f.face*(kind==='magic'?3.4:5.2),owner:f,kind,dmg:kind==='magic'?15:9,life:130,t:0}); SFX.swing(kind==='magic'?'staff':'bow'); }
@@ -463,7 +483,7 @@
     if(g.mode==='tutorial'){ updateTutorial(); return; }
     if(g.mode==='endless'){
       if(g.lock && livingFoes()===0 && enemies.every(e=>e.state!=='dead'||e.deadT>18)){
-        if(g.wave%3===0) offerUpgrade(); else startEndlessWave();
+        startEndlessWave();   // growth now comes from XP level-ups, not the roguelike draft
       }
       return;
     }
@@ -485,7 +505,7 @@
         g.lock=false; gate.done=true; g.progressWall=gate.x-40;
         if(gate.worldboss){ SFX.win(); if(game.worldIdx+1<WORLDS.length){ worldComplete(game.worldIdx+1); } else { g.state='clear'; banner('ALL WORLDS CLEARED — press R','#a9e5a9'); msgT=999; } return; }
         if(gate.mini){ SFX.win(); levelComplete(g.levelIdx+1); g.gateIdx++; return; }
-        offerUpgrade(); g.gateIdx++;
+        g.gateIdx++;   // (roguelike upgrade draft retired in favour of XP level-ups)
       }
     }
   }
@@ -516,6 +536,12 @@
       if(pressed.reset) reset(game.mode);
       clearPressed(); return;
     }
+    if(game.state==='levelup'){
+      const n=STAT_DEFS.length; if(pressed.up) game.luSel=(game.luSel+n-1)%n; if(pressed.down) game.luSel=(game.luSel+1)%n; if(pressed.up||pressed.down) SFX.select();
+      const i = pressed.opt1?0:pressed.opt2?1:pressed.opt3?2:pressed.opt4?3:pressed.opt5?4:(pressed.confirm||pressed.light)?game.luSel:-1;
+      if(i>=0){ const k=STAT_DEFS[i].k; CHAR.stats[k]++; if(k==='vit'){ player.maxhp+=12; player.hp+=12; } applyCharStats(player); player.hp=Math.min(player.maxhp,player.hp); CHAR.unspent--; SFX.select(); banner(STAT_DEFS[i].name+' +1','#a9e5a9'); saveCfg(); if(CHAR.unspent<=0) game.state='play'; else game.luSel=0; }
+      clearPressed(); return;
+    }
     if(game.state==='levelclear'){ game.levelClearT++; if(game.levelClearT>150 || pressed.confirm || pressed.light){ game.state='play'; loadLevel(game.nextLevel); } clearPressed(); return; }
     if(game.state==='worldclear'){ game.levelClearT++; if(game.levelClearT>200 || pressed.confirm || pressed.light){ game.worldIdx=game.nextWorld; game.state='play'; loadLevel(0); } clearPressed(); return; }
     if(game.state==='gameover'||game.state==='clear'){ if(pressed.reset) reset(game.mode); clearPressed(); if(msgT<900) msgT=999; return; }
@@ -524,6 +550,7 @@
 
     updateFighter(player,dt);
     for(const e of enemies) updateFighter(e,dt);
+    for(const e of enemies){ if(e.state==='dead'&&!e.xpGiven){ e.xpGiven=true; gainXP(xpFor(e)); } }   // XP on any death
     for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].state==='dead'&&enemies[i].deadT>70) enemies.splice(i,1); }
     updateShots(); updateBolts();
     for(let i=pickups.length-1;i>=0;i--){ const pk=pickups[i]; pk.t++; if(pk.vy!==0){ pk.y+=pk.vy; pk.vy+=0.22; if(pk.vy>0&&pk.t>12) pk.vy=0; }
@@ -873,6 +900,9 @@
     ctx.fillStyle=pp.plume; ctx.fillRect(20,9,3,5);
     hbar(38,10,120,player.hp,player.maxhp,'#4fa04f','#26401f','KNIGHT');
     const vfull=player.valor>=50; hbar(38,21,120,player.valor,100,vfull?'#e6c030':'#8a7a30','#2a2410','');
+    const xpNeed=xpForLevel(CHAR.level); hbar(38,30,120,Math.min(CHAR.xp,xpNeed),xpNeed,'#6f9fd8','#1a2434','');   // XP
+    ctx.fillStyle='#bcd4f0'; ctx.font='7px "Courier New"'; ctx.fillText('LV '+CHAR.level,40,29);
+    if(CHAR.unspent>0){ ctx.fillStyle=(performance.now()%600<380)?'#e6c030':'#c9b98a'; ctx.font='7px "Courier New"'; ctx.fillText('+'+CHAR.unspent+' STAT',110,29); }
     if(vfull){ ctx.fillStyle=(performance.now()%700<420)?'#e6c030':'#9a8f6a'; ctx.font='7px "Courier New"'; ctx.fillText('ART[O]',163,31); }
     const shReady=player.hasShield&&player.shieldCd<=0; ctx.fillStyle=shReady?'#a9c6ef':'#3f4a5e';
     ctx.beginPath(); ctx.moveTo(170,9); ctx.lineTo(178,11); ctx.lineTo(178,17); ctx.lineTo(170,22); ctx.lineTo(162,17); ctx.lineTo(162,11); ctx.closePath(); ctx.fill();
@@ -926,6 +956,21 @@
         ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText((i+1)+'. '+c.k, x+cw/2, y+30);
         ctx.fillStyle='#c9b98a'; ctx.font='9px "Courier New"'; wrap(c.d, x+8, y+50, cw-16, 12);
       }); ctx.textAlign='left';
+    }
+    // level-up: allocate a stat point
+    if(game.state==='levelup'){
+      ctx.fillStyle='rgba(0,0,0,.78)'; ctx.fillRect(0,0,W,H);
+      ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='18px "Courier New"'; ctx.fillText('LEVEL '+CHAR.level,W/2,44);
+      ctx.fillStyle='#e8dcc0'; ctx.font='10px "Courier New"'; ctx.fillText('choose a stat to raise'+(CHAR.unspent>1?'   ('+CHAR.unspent+' points left)':''),W/2,62);
+      const bx=W/2-150, bw=300;
+      STAT_DEFS.forEach((s,i)=>{ const y=88+i*26, sel=game.luSel===i;
+        if(sel){ ctx.fillStyle='rgba(230,192,48,.15)'; ctx.fillRect(bx,y-15,bw,22); }
+        ctx.strokeStyle=sel?'#e6c030':'#332c40'; ctx.lineWidth=1; ctx.strokeRect(bx+0.5,y-14.5,bw-1,21);
+        ctx.textAlign='left'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='11px "Courier New"'; ctx.fillText((sel?'▶':' ')+(i+1)+'. '+s.name,bx+8,y);
+        ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText(s.d,bx+118,y-1);
+        ctx.textAlign='right'; ctx.fillStyle='#7fb0e0'; ctx.font='9px "Courier New"'; ctx.fillText('■'.repeat(Math.min(8,CHAR.stats[s.k]))||'·',bx+bw-10,y);
+      });
+      ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('▲▼ choose    ENTER / '+keyName(BIND.light)+' confirm    (or 1-5)',W/2,H-16); ctx.textAlign='left';
     }
   }
   function wrap(text,x,y,maxw,lh){ const words=text.split(' '); let line='',yy=y; ctx.textAlign='center'; const cx=x+maxw/2;
@@ -1015,14 +1060,14 @@
   function updateMusic(){ if(!actx) return; const d=desiredTrack(); if(d!==curTrackName) playTrack(d); }
 
   // ---- config persistence ----
-  function saveCfg(){ try{ localStorage.setItem('ironclad',JSON.stringify({cfg,BIND,hi:HISCORE,endless:ENDLESS_BEST,disc:DISCOVERED,prog:PROGRESS})); }catch(e){} }
-  function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem('ironclad')); if(s){ if(s.cfg) Object.assign(cfg,s.cfg); if(s.BIND) Object.assign(BIND,s.BIND); if(s.hi) HISCORE=s.hi; if(s.endless) ENDLESS_BEST=s.endless; if(s.disc) DISCOVERED=s.disc; if(s.prog) Object.assign(PROGRESS,s.prog); } }catch(e){} }
+  function saveCfg(){ try{ localStorage.setItem('ironclad',JSON.stringify({cfg,BIND,hi:HISCORE,endless:ENDLESS_BEST,disc:DISCOVERED,prog:PROGRESS,char:CHAR})); }catch(e){} }
+  function loadCfg(){ try{ const s=JSON.parse(localStorage.getItem('ironclad')); if(s){ if(s.cfg) Object.assign(cfg,s.cfg); if(s.BIND) Object.assign(BIND,s.BIND); if(s.hi) HISCORE=s.hi; if(s.endless) ENDLESS_BEST=s.endless; if(s.disc) DISCOVERED=s.disc; if(s.prog) Object.assign(PROGRESS,s.prog); if(s.char){ CHAR=s.char; if(!CHAR.stats) CHAR.stats={vit:0,str:0,reach:0,guard:0,focus:0}; } } }catch(e){} }
   loadCfg();
 
   // ---- scene / menu state ----
   let scene='intro', menu={idx:0}, settingsFrom='title';
   let introT=0, introKnight=null;
-  const TITLEMENU=['START','LEVEL SELECT','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'];
+  const TITLEMENU=['START','LEVEL SELECT','CHARACTER','ENDLESS','TUTORIAL','BESTIARY','CONTROLS','SETTINGS'];
   const SET=['SFX Volume','Music','Rebind Light','Rebind Heavy','Rebind Grab','Rebind Block','Screen Shake','Damage Numbers','Particle Density','Difficulty','Back'];
   let lsW=0, lsL=0;   // level-select cursor (world, level)
   // start a campaign run at a specific world/level (used by level select)
@@ -1064,6 +1109,7 @@
     if(scene==='title'){ const n=TITLEMENU.length; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
       if(ok){ SFX.select(); const s=TITLEMENU[menu.idx];
         if(s==='START')startRun('campaign'); else if(s==='LEVEL SELECT'){ scene='levelselect'; lsW=0; lsL=0; }
+        else if(s==='CHARACTER'){ scene='character'; }
         else if(s==='ENDLESS')startRun('endless'); else if(s==='TUTORIAL')startRun('tutorial');
         else if(s==='BESTIARY'){ scene='bestiary'; menu.idx=0; } else if(s==='CONTROLS')scene='controls';
         else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
@@ -1074,6 +1120,7 @@
       if(dn){ lsL=(lsL+1)%worldLevelCount(lsW); SFX.select(); }
       if(ok){ if(levelUnlocked(lsW,lsL)){ SFX.select(); startAtLevel(lsW,lsL); } else SFX.block(); }
       if(back){ SFX.select(); scene='title'; menu.idx=1; } }
+    else if(scene==='character'){ if(back||ok){ SFX.select(); scene='title'; menu.idx=2; } }
     else if(scene==='bestiary'){ const n=BEST.length; if(up||lf)menu.idx=(menu.idx+n-1)%n; if(dn||rt)menu.idx=(menu.idx+1)%n; if(up||dn||lf||rt)SFX.select(); if(back||pressed.confirm){ SFX.select(); scene='title'; menu.idx=3; } }
     else if(scene==='controls'){ if(ok||back){ SFX.select(); scene='title'; } }
     else if(scene==='pause'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
@@ -1096,7 +1143,7 @@
   function panel(x,y,w,h){ ctx.fillStyle='rgba(10,8,14,.86)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='#c9b98a'; ctx.lineWidth=1; ctx.strokeRect(x+0.5,y+0.5,w-1,h-1); }
   function logo(y){ ctx.textAlign='center'; ctx.fillStyle='#241634'; ctx.font='30px "Courier New"'; ctx.fillText('IRONCLAD',W/2+2,y+2); ctx.fillStyle='#e6c030'; ctx.fillText('IRONCLAD',W/2,y); ctx.font='9px "Courier New"'; ctx.fillStyle='#9a8f6a'; ctx.fillText('a knight against knights',W/2,y+16); ctx.textAlign='left'; }
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
-  const BUILD='2026-07-19b · level-select · intro · sidestep · sprites+';
+  const BUILD='2026-07-19c · RPG level-up stats · persistent character';
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.textAlign='left'; ctx.fillStyle='#4a8fce'; ctx.font='7px "Courier New"'; ctx.fillText('build '+BUILD, 6, 12);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
@@ -1206,6 +1253,29 @@
       if(performance.now()%1000<500){ ctx.textAlign='center'; ctx.fillStyle='rgba(200,190,170,.6)'; ctx.font='7px "Courier New"'; ctx.fillText('press any key to skip',W/2,H-14); ctx.textAlign='left'; }
     }
   }
+  function renderCharacter(){
+    const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#101018'); g0.addColorStop(1,'#1a1622'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText('CHARACTER',W/2,28);
+    // portrait
+    ctx.fillStyle='#0e0a14'; ctx.fillRect(40,46,120,150); ctx.strokeStyle='#c9b98a'; ctx.strokeRect(40.5,46.5,119,149);
+    if(!introKnight) introKnight=makeFighter({x:0,y:0,face:1,isPlayer:true,hp:100,name:'K',weapon:'sword',build:{helm:'crest',cape:'#c94f4f',shield:'kite',pauld:'plate',bulk:1.0},pal:{armor:'#5b7fb0',trim:'#a9c6ef',dark:'#2c3f5e',skin:'#d9a978',plume:'#c94f4f',weap:'#e6ecf5'}});
+    introKnight.x=100; introKnight.y=188; introKnight.size=1.8; introKnight.state='idle'; introKnight.face=1; drawKnight(introKnight);
+    // level + xp
+    ctx.textAlign='left'; ctx.fillStyle='#e6c030'; ctx.font='14px "Courier New"'; ctx.fillText('LEVEL '+CHAR.level,190,64);
+    const xpNeed=xpForLevel(CHAR.level); ctx.fillStyle='#26303f'; ctx.fillRect(190,72,220,8); ctx.fillStyle='#6f9fd8'; ctx.fillRect(190,72,220*Math.min(1,CHAR.xp/xpNeed),8); ctx.strokeStyle='#4a5566'; ctx.strokeRect(190.5,72.5,219,7);
+    ctx.fillStyle='#8fa4bc'; ctx.font='7px "Courier New"'; ctx.fillText(CHAR.xp+' / '+xpNeed+' XP',190,90);
+    if(CHAR.unspent>0){ ctx.fillStyle='#e6c030'; ctx.font='9px "Courier New"'; ctx.fillText('+'+CHAR.unspent+' unspent (spend on next level-up)',300,90); }
+    // stat lines
+    STAT_DEFS.forEach((s,i)=>{ const y=112+i*17, v=CHAR.stats[s.k];
+      ctx.fillStyle='#c9b98a'; ctx.font='10px "Courier New"'; ctx.fillText(s.name,190,y);
+      ctx.fillStyle='#7fb0e0'; for(let b=0;b<10;b++){ ctx.fillStyle=b<v?'#7fb0e0':'#2a3240'; ctx.fillRect(270+b*10,y-8,7,8); }
+      ctx.fillStyle='#9a8f6a'; ctx.font='7px "Courier New"'; ctx.textAlign='right'; ctx.fillText(s.d,W-24,y); ctx.textAlign='left';
+    });
+    // derived summary
+    const s=CHAR.stats; ctx.fillStyle='#8fa4bc'; ctx.font='8px "Courier New"';
+    ctx.fillText('HP '+(100+s.vit*12)+'   ATK x'+(1+s.str*0.08).toFixed(2)+'   REACH +'+(s.reach*3)+'   DMG-TAKEN x'+Math.pow(0.94,s.guard).toFixed(2)+'   VALOR x'+(1+s.focus*0.15).toFixed(2),190,210);
+    ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='9px "Courier New"'; ctx.fillText('ESC / ENTER  back',W/2,H-14); ctx.textAlign='left';
+  }
   function renderLevelSelect(){
     const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#120c16'); g0.addColorStop(1,'#1e1628'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='16px "Courier New"'; ctx.fillText('LEVEL SELECT',W/2,30);
@@ -1228,7 +1298,7 @@
     ctx.fillText(unl?('ENTER  ·  '+WORLDS[lsW].name+' — '+cur.name):'Reach this level in the campaign to unlock it',W/2,H-30);
     ctx.fillStyle='#9a8f6a'; ctx.fillText('◀▶ world    ▲▼ level    ENTER start    ESC back',W/2,H-14); ctx.textAlign='left';
   }
-  function drawAll(){ if(scene==='intro'){ renderIntro(); return; } if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } if(scene==='levelselect'){ renderLevelSelect(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
+  function drawAll(){ if(scene==='intro'){ renderIntro(); return; } if(scene==='title'){ renderTitle(); return; } if(scene==='bestiary'){ renderBestiary(); return; } if(scene==='levelselect'){ renderLevelSelect(); return; } if(scene==='character'){ renderCharacter(); return; } render(); if(scene==='pause') overlayMenu('PAUSED',['RESUME','SETTINGS','QUIT TO TITLE']); else if(scene==='controls') renderControls(); else if(scene==='settings') renderSettings(); }
 
   let last=performance.now(),acc=0;
   function tick(now){ let dt=now-last; last=now; if(dt>250) dt=250; acc+=dt; let steps=0; while(acc>=1000/60&&steps<6){ update(F); acc-=1000/60; steps++; } updateMusic(); drawAll(); }
@@ -1282,7 +1352,8 @@
     get paint(){return PAINT;}, set paint(v){PAINT=v;},
     get discovered(){return DISCOVERED;}, get progress(){return PROGRESS;},
     discoverAll:()=>{ BEST.forEach(b=>DISCOVERED[b.disp||b.type]=1); saveCfg(); },
-    wipeSave:()=>{ DISCOVERED={}; PROGRESS={world:0,level:0,rank:-1}; saveCfg(); },
+    wipeSave:()=>{ DISCOVERED={}; PROGRESS={world:0,level:0,rank:-1}; CHAR={level:1,xp:0,unspent:0,stats:{vit:0,str:0,reach:0,guard:0,focus:0}}; saveCfg(); },
+    get char(){return CHAR;}, addXP:(n)=>gainXP(n||50),
     get props(){return props;}, get pickups(){return pickups;}, get ebolts(){return ebolts;},
     fire:(f,k)=>fireBolt(f||enemies[0]||player,k||'arrow'),
     key:(code)=>{ dispatchEvent(new KeyboardEvent('keydown',{code})); dispatchEvent(new KeyboardEvent('keyup',{code})); },

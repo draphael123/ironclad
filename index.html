@@ -149,6 +149,8 @@
     shots.length=0; pickups.length=0; props.length=0;
     hitstop=0; shake=0; msg=''; msgT=0; msgCol='#e8dcc0';
     if(mode==='endless'){ player.x=W/2; game.lock=true; startEndlessWave(); }
+    else if(mode==='tutorial'){ player.maxhp=500; player.hp=500; player.x=Math.round(W*0.34); game.tutStartX=player.x; game.tutStep=0; game.lock=true; game.camX=0;
+      const d=spawnEnemy('grunt',Math.round(W*0.72),236); d.hp=d.maxhp=9999; d.name='DUMMY'; banner('TRAINING GROUNDS','#e6c030'); msgT=70; }
     else { [300,470,760,1080,1360,1720,2020].forEach((bx,i)=> props.push({x:bx,y:FLOOR_TOP+18+(i%3)*24,broken:0,t:0})); banner('STAGE 1 — THE OUTER WARD','#e8dcc0'); msgT=90; }
   }
   function startEndlessWave(){ game.wave++; game.lock=true; game.camX=0; game.progressWall=0;
@@ -330,8 +332,14 @@
 
   function livingFoes(){ return enemies.filter(e=>e.state!=='dead').length; }
 
+  function updateTutorial(){
+    const step=TUT[game.tutStep];
+    if(!step){ if(!game.tutDone){ game.tutDone=1; game.tutT=0; banner('TRAINING COMPLETE','#a9e5a9'); msgT=999; } game.tutT=(game.tutT||0)+1; if(game.tutT>120){ scene='title'; } return; }
+    if(step.c()){ game.tutStep++; game.tutFlash=22; SFX.select(); const nx=TUT[game.tutStep]; if(nx&&/Valor/.test(nx.m)) player.valor=100; }
+  }
   function updateStage(){
     const g=game;
+    if(g.mode==='tutorial'){ updateTutorial(); return; }
     if(g.mode==='endless'){
       if(g.lock && livingFoes()===0 && enemies.every(e=>e.state!=='dead'||e.deadT>18)){
         if(g.wave%3===0) offerUpgrade(); else startEndlessWave();
@@ -410,7 +418,7 @@
     updateStage();
     updateCamera();
     if(shake>0) shake*=0.85; if(msgT>0) msgT--; if(game.goPulse>0) game.goPulse--; if(game.bigFlash>0) game.bigFlash--; if(game.comboT>0){ game.comboT--; if(game.comboT===0) game.combo=0; }
-    if(game.punch>0) game.punch*=0.88; if(game.nameCard){ game.nameCard.t++; if(game.nameCard.t>150) game.nameCard=null; }
+    if(game.punch>0) game.punch*=0.88; if(game.nameCard){ game.nameCard.t++; if(game.nameCard.t>150) game.nameCard=null; } if(game.tutFlash>0) game.tutFlash--;
     if(pressed.reset) reset();
     clearPressed();
   }
@@ -628,6 +636,13 @@
       ctx.fillStyle='#c9b98a'; ctx.font='9px "Courier New"'; ctx.fillText(nc.sub,W/2,H/2+12); ctx.textAlign='left'; ctx.restore(); }
     // messages
     else if(msgT>0){ ctx.fillStyle='#000'; ctx.fillRect(0,H/2-14,W,28); ctx.fillStyle=msgCol; ctx.font='14px "Courier New"'; ctx.textAlign='center'; ctx.fillText(msg,W/2,H/2+5); ctx.textAlign='left'; }
+    // tutorial prompt
+    if(game.mode==='tutorial'){ const step=TUT[game.tutStep];
+      ctx.fillStyle='rgba(12,10,16,.82)'; ctx.fillRect(0,H-30,W,30); ctx.textAlign='center';
+      if(step){ ctx.fillStyle='#e6c030'; ctx.font='11px "Courier New"'; ctx.fillText('▶ '+step.m, W/2, H-15); ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('TUTORIAL   '+(game.tutStep+1)+' / '+TUT.length, W/2, H-5); }
+      else { ctx.fillStyle='#a9e5a9'; ctx.font='11px "Courier New"'; ctx.fillText('TRAINING COMPLETE — returning to title…', W/2, H-12); }
+      if(game.tutFlash>0){ ctx.fillStyle='#a9e5a9'; ctx.font='22px "Courier New"'; ctx.globalAlpha=Math.min(1,game.tutFlash/22); ctx.fillText('GOOD!', W/2, H/2-34); ctx.globalAlpha=1; }
+      ctx.textAlign='left'; }
     // upgrade cards
     if(game.state==='upgrade'){
       ctx.fillStyle='rgba(0,0,0,.72)'; ctx.fillRect(0,0,W,H);
@@ -684,6 +699,19 @@
   const SET=['SFX Volume','Music','Rebind Light','Rebind Heavy','Rebind Grab','Rebind Block','Back'];
   const RB=['light','heavy','grab','block'];
   const keyName=c=>String(c).replace('Key','').replace('Digit','').replace('Arrow','');
+  const TUT=[
+    {m:'MOVE — arrows or WASD', c:()=>Math.abs(player.x-game.tutStartX)>44},
+    {m:'STRIKE — press '+keyName(BIND.light), c:()=>player.state==='attack'&&/^light/.test(player.att||'')},
+    {m:'COMBO — land 3 quick hits', c:()=>game.combo>=3},
+    {m:'HEAVY BLOW — '+keyName(BIND.heavy), c:()=>player.state==='attack'&&player.att==='heavy'},
+    {m:'BLOCK — hold '+keyName(BIND.block)+' or Space', c:()=>player.state==='block'},
+    {m:'PARRY — tap block as the blow lands', c:()=>enemies.some(e=>e.state==='stagger')},
+    {m:'GRAB — '+keyName(BIND.grab)+'  (beats a block)', c:()=>enemies.some(e=>e.state==='down')},
+    {m:'DODGE — Shift roll (i-frames)', c:()=>player.state==='roll'},
+    {m:'LAUNCHER — hold ↑ + '+keyName(BIND.heavy), c:()=>enemies.some(e=>e.state==='air')},
+    {m:'SHIELD THROW — U (boomerang)', c:()=>shots.length>0||player.hasShield===false},
+    {m:"KNIGHT'S ART — press O (Valor ready)", c:()=>player.state==='art'},
+  ];
   function startRun(mode){ reset(mode); scene='play'; }
   function checkHi(){ if(game.score>HISCORE){ HISCORE=game.score; saveCfg(); } }
 
@@ -697,8 +725,8 @@
   }
   function menuUpdate(){
     const up=pressed.up,dn=pressed.down,lf=pressed.left,rt=pressed.right,ok=pressed.confirm||pressed.block||pressed.light,back=pressed.pause;
-    if(scene==='title'){ const n=4; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
-      if(ok){ SFX.select(); if(menu.idx===0)startRun('campaign'); else if(menu.idx===1)startRun('endless'); else if(menu.idx===2)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
+    if(scene==='title'){ const n=5; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
+      if(ok){ SFX.select(); if(menu.idx===0)startRun('campaign'); else if(menu.idx===1)startRun('endless'); else if(menu.idx===2)startRun('tutorial'); else if(menu.idx===3)scene='controls'; else{ settingsFrom='title'; scene='settings'; menu.idx=0; } } }
     else if(scene==='controls'){ if(ok||back){ SFX.select(); scene='title'; } }
     else if(scene==='pause'){ const n=3; if(up)menu.idx=(menu.idx+n-1)%n; if(dn)menu.idx=(menu.idx+1)%n; if(up||dn)SFX.select();
       if(back) scene='play'; else if(ok){ SFX.select(); if(menu.idx===0)scene='play'; else if(menu.idx===1){ settingsFrom='pause'; scene='settings'; menu.idx=0; } else scene='title'; } }
@@ -717,7 +745,7 @@
   function opt(txt,cx,cy,sel){ ctx.textAlign='center'; ctx.fillStyle=sel?'#e6c030':'#c9b98a'; ctx.font='12px "Courier New"'; ctx.fillText((sel?'▶ ':'  ')+txt,cx,cy); ctx.textAlign='left'; }
   function renderTitle(){ const g0=ctx.createLinearGradient(0,0,0,H); g0.addColorStop(0,'#150d18'); g0.addColorStop(1,'#241a2e'); ctx.fillStyle=g0; ctx.fillRect(0,0,W,H);
     const fl=performance.now()/90; for(let x=60;x<W;x+=120){ const grd=ctx.createRadialGradient(x,58,0,x,58,42); grd.addColorStop(0,'rgba(255,160,60,'+(0.16+Math.sin(fl+x)*0.05)+')'); grd.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=grd; ctx.fillRect(x-42,16,84,84); }
-    logo(84); ['START','ENDLESS','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,132+i*19,menu.idx===i));
+    logo(80); ['START','ENDLESS','TUTORIAL','CONTROLS','SETTINGS'].forEach((o,i)=>opt(o,W/2,124+i*18,menu.idx===i));
     ctx.textAlign='center'; ctx.fillStyle='#9a8f6a'; ctx.font='8px "Courier New"'; ctx.fillText('HI-SCORE '+String(HISCORE).padStart(6,'0')+'    ENDLESS BEST  WAVE '+ENDLESS_BEST,W/2,H-24);
     if(performance.now()%1000<600){ ctx.fillStyle='#e8dcc0'; ctx.fillText('▲▼ select    ENTER confirm',W/2,H-12); } ctx.textAlign='left'; }
   function renderControls(){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); panel(74,32,332,210); ctx.textAlign='center'; ctx.fillStyle='#e6c030'; ctx.font='13px "Courier New"'; ctx.fillText('CONTROLS',W/2,52); ctx.font='9px "Courier New"'; ctx.textAlign='left';
